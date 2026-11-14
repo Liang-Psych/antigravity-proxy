@@ -3,6 +3,8 @@ package proxy
 import (
 	"antigravity-proxy/internal/quota"
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 )
 
@@ -28,7 +30,13 @@ func (p *Proxy) QuotaFetcher() *quota.Fetcher {
 			if project != "" {
 				payload["project"] = project
 			}
-			return p.postJSON(ctx, token, quota.SummaryPath, project, payload)
+			body, err := json.Marshal(payload)
+			if err != nil {
+				return nil, errors.New("encode Antigravity request failed")
+			}
+			call := jsonUpstreamCall(quota.SummaryPath, "application/json", project, body)
+			call.poll = true
+			return p.post(ctx, token, call)
 		},
 	})
 }

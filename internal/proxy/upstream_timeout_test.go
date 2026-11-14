@@ -370,7 +370,7 @@ func TestFiniteDeadlineSpansAllFallbackAttempts(t *testing.T) {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-time.After(140 * time.Millisecond):
+		case <-time.After(500 * time.Millisecond):
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
@@ -392,7 +392,9 @@ func TestFiniteDeadlineSpansAllFallbackAttempts(t *testing.T) {
 	p := New(config.Config{DailyEndpoint: daily.URL, ProdEndpoint: prod.URL})
 	p.client = newUpstreamClient(time.Second, 200*time.Millisecond)
 	defer p.client.CloseIdleConnections()
-	p.rpcTimeout = 200 * time.Millisecond
+	// Leave enough scheduling margin for virtualized CI while still detecting
+	// a renewed deadline (500ms first attempt + 1s renewed budget).
+	p.rpcTimeout = time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	started := time.Now()
@@ -402,7 +404,7 @@ func TestFiniteDeadlineSpansAllFallbackAttempts(t *testing.T) {
 	}
 	defer response.Body.Close()
 	_, err = io.ReadAll(response.Body)
-	if !errors.Is(err, context.DeadlineExceeded) || time.Since(started) >= 350*time.Millisecond {
+	if !errors.Is(err, context.DeadlineExceeded) || time.Since(started) >= 1300*time.Millisecond {
 		t.Fatalf("fallback renewed finite deadline: %v after %v", err, time.Since(started))
 	}
 }

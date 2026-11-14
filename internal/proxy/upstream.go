@@ -45,6 +45,7 @@ type upstreamCall struct {
 	body    func() io.Reader
 	length  int64
 	finite  bool
+	poll    bool // quota polling must not wait for an unrelated OAuth refresh
 }
 
 func (p *Proxy) postJSON(ctx context.Context, token, path, project string, payload any) (*http.Response, error) {
@@ -75,8 +76,20 @@ func (p *Proxy) post(ctx context.Context, token string, call upstreamCall) (*htt
 	}()
 	revision := p.projectRevision.Load()
 	var lastErr error
+	authRetried := false
 	for _, endpoint := range p.endpoints() {
 		resp, err := p.postEncoded(ctx, endpoint, token, call)
+		var rejected *upstreamError
+		if !authRetried && errors.As(err, &rejected) && rejected.Status == http.StatusUnauthorized && p.cfg.AccessToken == "" && p.cfg.RefreshToken != "" {
+			// postEncoded closes rejected bodies before returning. No response has
+			// reached the caller, so replay the identical body once on this endpoint.
+			authRetried = true
+			token, err = p.tokens.refreshRejected(ctx, token, call.poll)
+			if err != nil {
+				return nil, err
+			}
+			resp, err = p.postEncoded(ctx, endpoint, token, call)
+		}
 		if err == nil {
 			if call.finite {
 				resp.Body = &cancelResponseBody{ReadCloser: resp.Body, cancel: cancel}

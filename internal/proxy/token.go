@@ -62,6 +62,36 @@ func (s *tokenSource) token(ctx context.Context, poll bool) (string, error) {
 	if s.cachedToken != "" && time.Until(s.expiresAt) > time.Minute {
 		return s.cachedToken, nil
 	}
+	return s.refreshLocked(ctx)
+}
+
+// refreshRejected serializes recovery and reuses a replacement already obtained
+// by another request. Explicit access tokens are never replaced by OAuth.
+func (s *tokenSource) refreshRejected(ctx context.Context, rejected string, poll bool) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if poll {
+		if !s.mu.TryLock() {
+			return "", quota.ErrAuthenticationBusy
+		}
+	} else {
+		s.mu.Lock()
+	}
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if s.cachedToken != rejected && s.cachedToken != "" && time.Until(s.expiresAt) > time.Minute {
+		return s.cachedToken, nil
+	}
+	// Do not keep using a token known to have been rejected if refresh fails.
+	s.cachedToken, s.expiresAt = "", time.Time{}
+	return s.refreshLocked(ctx)
+}
+
+// refreshLocked requires mu and retains only sanitized errors.
+func (s *tokenSource) refreshLocked(ctx context.Context) (string, error) {
 	tokens, err := oauth.RefreshWithClient(ctx, *s.cfg, s.client)
 	if err != nil {
 		if ctx.Err() != nil {

@@ -53,6 +53,15 @@ On Unix systems, this file must have owner-only permissions (`chmod 600`). The p
 }
 ```
 
+### OAuth Recovery
+
+If Google rejects a request with HTTP 401, the proxy refreshes OAuth credentials
+and retries the same request once, before returning any upstream response to the
+client. Concurrent requests reuse an already refreshed token. The recovery limit
+applies across both upstream endpoints. Explicit access tokens are not refreshed;
+403 responses, errors inside an accepted stream, and interrupted streams do not
+trigger OAuth recovery. Quota polls never wait for another request's refresh.
+
 ### Migration from Single-Account Configurations
 Antigravity Proxy automatically migrates existing single-account configurations on load. If your configuration file contains flat `refreshToken`, `apiKey`, and `accountId` fields without an `accounts` array:
 - It is converted in-memory into a single account named `default`.
