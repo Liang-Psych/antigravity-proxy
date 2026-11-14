@@ -31,6 +31,9 @@ func (p *Proxy) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch route.kind {
+	case routeUnsupportedInteractions:
+		rejectUnreadBody(w, r)
+		writeGeminiError(w, http.StatusNotImplemented, "Interactions API is not supported; configure your client to use Gemini generateContent or streamGenerateContent (google-generative protocol)")
 	case routeRawModels:
 		if !p.hasCredentials() {
 			httpjson.Write(w, http.StatusServiceUnavailable, map[string]string{"error": "Google authentication unavailable"})

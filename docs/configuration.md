@@ -126,3 +126,11 @@ and verify generation with the supported version before updating the setting.
 
 4. **Structured Logging**:
    All logs use Go's standard `log/slog` in structured JSON format. Credentials, prompts, responses, and authorization tokens are never logged.
+
+   Failed streaming requests add a `stream_failure` category to the access log.
+   For example, `upstream_timeout` means the upstream read timed out,
+   `upstream_incomplete` means the stream lacked completion metadata, and
+   `downstream_write_failed` means delivery to the client failed. Categories are
+   fixed labels; raw errors and response content are not recorded. A committed
+   stream can still have HTTP status 200 with `aborted: true`: it is terminated
+   rather than having a synthetic error or completion inserted into model output.

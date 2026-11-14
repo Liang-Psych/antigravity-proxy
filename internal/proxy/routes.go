@@ -13,6 +13,7 @@ const (
 	routeAccount
 	routeNativeList
 	routeNativeModel
+	routeUnsupportedInteractions
 )
 
 type apiRoute struct {
@@ -41,6 +42,9 @@ func resolveRoute(path string) apiRoute {
 		if path == route.path {
 			return apiRoute{kind: route.kind, label: path}
 		}
+	}
+	if path == "/v1beta/interactions" || strings.HasPrefix(path, "/v1beta/interactions/") {
+		return apiRoute{kind: routeUnsupportedInteractions, label: "/v1beta/interactions"}
 	}
 	if strings.HasPrefix(path, "/v1beta/models/") {
 		model, action, hasAction := strings.Cut(strings.TrimPrefix(path, "/v1beta/models/"), ":")

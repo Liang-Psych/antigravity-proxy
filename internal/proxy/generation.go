@@ -3,6 +3,7 @@ package proxy
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -124,7 +125,7 @@ func (p *Proxy) handleGenerateContent(w http.ResponseWriter, r *http.Request, mo
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if stream {
-		forwardGenerationStream(w, resp.Body)
+		forwardGenerationStream(r.Context(), w, resp.Body)
 		return
 	}
 	body, err := readGenerationResponse(resp.Body, maxGenerationResponseSize)
@@ -404,7 +405,7 @@ func (completion *generationStreamCompletion) complete() bool {
 	return true
 }
 
-func forwardGenerationStream(w http.ResponseWriter, body io.Reader) {
+func forwardGenerationStream(ctx context.Context, w http.ResponseWriter, body io.Reader) {
 	reader := bufio.NewReader(body)
 	controller := http.NewResponseController(w)
 	// Delay SSE headers until the first valid JSON event so early failures retain
@@ -412,7 +413,17 @@ func forwardGenerationStream(w http.ResponseWriter, body io.Reader) {
 	committed := false
 	var completion generationStreamCompletion
 	var pending bytes.Buffer
-	fail := func(err error) {
+	fail := func(category string, err error) {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			category = "request_canceled"
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			if strings.HasPrefix(category, "downstream_") {
+				category = "downstream_timeout"
+			} else {
+				category = "upstream_timeout"
+			}
+		}
+		recordStreamFailure(ctx, category)
 		if committed {
 			// net/http aborts the response (HTTP/2 resets the stream); never
 			// convert a truncated or malformed upstream stream to success.
@@ -423,14 +434,14 @@ func forwardGenerationStream(w http.ResponseWriter, body io.Reader) {
 	for {
 		event, readErr := readGenerationSSEEvent(reader)
 		if readErr != nil && readErr != io.EOF {
-			fail(readErr)
+			fail("upstream_read_failed", readErr)
 			return
 		}
 		var data []byte
 		if event.hasData {
 			if bytes.Equal(bytes.TrimSpace(event.data), []byte("[DONE]")) {
 				if !committed || !completion.complete() {
-					fail(io.ErrUnexpectedEOF)
+					fail("upstream_incomplete", io.ErrUnexpectedEOF)
 					return
 				}
 				if readErr == io.EOF {
@@ -441,18 +452,18 @@ func forwardGenerationStream(w http.ResponseWriter, body io.Reader) {
 			var err error
 			data, err = unwrapGenerationResponse(event.data)
 			if err != nil {
-				fail(err)
+				fail("upstream_invalid_response", err)
 				return
 			}
 			if err := completion.observe(data); err != nil {
-				fail(err)
+				fail("upstream_invalid_metadata", err)
 				return
 			}
 			// Bifrost expects complete JSON on one conventional SSE data line.
 			// Compact preserves numeric literals, signatures and object ordering.
 			var compact bytes.Buffer
 			if err := json.Compact(&compact, data); err != nil {
-				fail(err)
+				fail("upstream_invalid_json", err)
 				return
 			}
 			data = compact.Bytes()
@@ -467,31 +478,31 @@ func forwardGenerationStream(w http.ResponseWriter, body io.Reader) {
 			frame := encodeGenerationSSEEvent(event, data)
 			if !committed {
 				if pending.Len() > maxGenerationResponseSize-len(frame) {
-					fail(errors.New("generation stream prelude exceeds size limit"))
+					fail("upstream_prelude_too_large", errors.New("generation stream prelude exceeds size limit"))
 					return
 				}
 				pending.Write(frame)
 			} else {
 				if pending.Len() != 0 {
 					if _, err := w.Write(pending.Bytes()); err != nil {
-						fail(err)
+						fail("downstream_write_failed", err)
 						return
 					}
 					pending.Reset()
 				}
 				if _, err := w.Write(frame); err != nil {
-					fail(err)
+					fail("downstream_write_failed", err)
 					return
 				}
 				if err := controller.Flush(); err != nil {
-					fail(fmt.Errorf("flush generation event: %w", err))
+					fail("downstream_flush_failed", err)
 					return
 				}
 			}
 		}
 		if readErr == io.EOF {
 			if !committed || !completion.complete() {
-				fail(io.ErrUnexpectedEOF)
+				fail("upstream_incomplete", io.ErrUnexpectedEOF)
 			}
 			return
 		}

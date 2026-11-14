@@ -14,9 +14,10 @@ import (
 type accessStateKey struct{}
 
 type accessRequestState struct {
-	id       string
-	mu       sync.Mutex
-	endpoint string
+	id            string
+	mu            sync.Mutex
+	endpoint      string
+	streamFailure string
 }
 
 // recordRequestEndpoint records only the endpoint origin, never credentials,
@@ -43,6 +44,27 @@ func requestEndpoint(ctx context.Context) string {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	return state.endpoint
+}
+
+// Record only fixed failure categories, never error text or streamed content.
+func recordStreamFailure(ctx context.Context, category string) {
+	state, _ := ctx.Value(accessStateKey{}).(*accessRequestState)
+	if state == nil {
+		return
+	}
+	state.mu.Lock()
+	state.streamFailure = category
+	state.mu.Unlock()
+}
+
+func requestStreamFailure(ctx context.Context) string {
+	state, _ := ctx.Value(accessStateKey{}).(*accessRequestState)
+	if state == nil {
+		return ""
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	return state.streamFailure
 }
 
 func ensureRequestID(w http.ResponseWriter, r *http.Request) (*http.Request, error) {
@@ -126,6 +148,9 @@ func (p *Proxy) serveWithAccessLogScoped(w http.ResponseWriter, r *http.Request,
 			"request_id", w.Header().Get("X-Request-ID"),
 			"endpoint", requestEndpoint(r.Context()),
 			"aborted", panicValue != nil || r.Context().Err() != nil,
+		}
+		if failure := requestStreamFailure(r.Context()); failure != "" {
+			attrs = append(attrs, "stream_failure", failure)
 		}
 		if accountID != "" {
 			attrs = append([]any{"account", accountID}, attrs...)

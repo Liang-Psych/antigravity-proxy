@@ -18,6 +18,12 @@ Antigravity Proxy exposes a native Google Gemini `/v1beta` HTTP interface along 
 | `POST /v1beta/models/{id}:generateContent` | Native Gemini content generation | Account `API_KEY` |
 | `POST /v1beta/models/{id}:streamGenerateContent?alt=sse` | Native Gemini streaming generation (SSE) | Account `API_KEY` |
 
+The Interactions API (`/v1beta/interactions` and its child paths) is not
+implemented. After authentication these routes return Gemini JSON with HTTP 501
+and instructions to use `generateContent` or `streamGenerateContent`. Clients
+must select the `google-generative` protocol rather than Interactions; the proxy
+does not translate between those protocols.
+
 ### Admin API (Admin API Key authenticated)
 
 | Method and Path | Description | Authentication |

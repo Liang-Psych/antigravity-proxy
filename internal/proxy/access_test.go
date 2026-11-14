@@ -111,7 +111,7 @@ func TestAccessLogRecordsStreamAbortWithoutSuppressingPanic(t *testing.T) {
 	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
 		t.Fatal(err)
 	}
-	if entry["aborted"] != true || entry["status"] != float64(200) || strings.Contains(logs.String(), "partial-secret") {
+	if entry["aborted"] != true || entry["status"] != float64(200) || entry["stream_failure"] != "upstream_incomplete" || strings.Contains(logs.String(), "partial-secret") {
 		t.Fatalf("abort log = %s", logs.String())
 	}
 }

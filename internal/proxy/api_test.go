@@ -32,6 +32,36 @@ func TestNonGeminiAPIRoutesAreUnsupported(t *testing.T) {
 	}
 }
 
+func TestInteractionsExplainsSupportedProtocolAfterAuthentication(t *testing.T) {
+	proxy := New(config.Config{APIKey: "local-key"})
+	for _, path := range []string{"/v1beta/interactions", "/v1beta/interactions/private-interaction-id", "/v1beta/interactions/private-interaction-id/cancel"} {
+		for _, authorized := range []bool{false, true} {
+			request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"input":"private-prompt"}`))
+			if authorized {
+				request.Header.Set("x-goog-api-key", "local-key")
+			}
+			recorder := httptest.NewRecorder()
+			proxy.ServeHTTP(recorder, request)
+			wantCode, wantStatus := http.StatusUnauthorized, "UNAUTHENTICATED"
+			if authorized {
+				wantCode, wantStatus = http.StatusNotImplemented, "UNIMPLEMENTED"
+			}
+			assertCatalogTestError(t, recorder, wantCode, wantStatus)
+			body := recorder.Body.String()
+			if authorized && (!strings.Contains(body, "google-generative") || !strings.Contains(body, "streamGenerateContent")) {
+				t.Fatalf("missing actionable protocol guidance: %s", body)
+			}
+			if strings.Contains(body, "private-") || strings.Contains(body, "local-key") {
+				t.Fatalf("response reflected private request data: %s", body)
+			}
+			route, model := accessRoute(request)
+			if route != "/v1beta/interactions" || model != "" {
+				t.Fatalf("unsafe interaction log label: %q %q", route, model)
+			}
+		}
+	}
+}
+
 func TestModelListingPassesUpstreamResponseThrough(t *testing.T) {
 	const responseBody = `{"models":{"gemini-example":{"displayName":"Gemini Example"},"other-model":{"displayName":"Other"}}}`
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

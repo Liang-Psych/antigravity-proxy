@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/iotest"
 	"time"
 )
 
@@ -173,7 +174,7 @@ func TestGenerationSSELargeFragmentedMultilineAndFinalEvent(t *testing.T) {
 		"data: {\"response\":{\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"" + inline + "\"}}]}}]}}\n\n" +
 		"data: {\"response\":" + finish + "}\n\n" + "data: " + nativeError + "\n\n" + "data: [DONE]\n\n" + "data: {\"response\":" + usage + "}"
 	recorder := httptest.NewRecorder()
-	forwardGenerationStream(recorder, fragmentedGenerationReader{strings.NewReader(wire)})
+	forwardGenerationStream(context.Background(), recorder, fragmentedGenerationReader{strings.NewReader(wire)})
 	if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Type") != "text/event-stream" || !recorder.Flushed {
 		t.Fatalf("stream headers = %d %v, flushed=%v", recorder.Code, recorder.Header(), recorder.Flushed)
 	}
@@ -230,7 +231,7 @@ func TestGenerationSSEFailureBoundaries(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
-			forwardGenerationStream(recorder, reader)
+			forwardGenerationStream(context.Background(), recorder, reader)
 			if recorder.Code != http.StatusBadGateway || recorder.Header().Get("Content-Type") != "application/json" || !json.Valid(recorder.Body.Bytes()) {
 				t.Fatalf("pre-event failure = %d %v %s", recorder.Code, recorder.Header(), recorder.Body.String())
 			}
@@ -247,7 +248,56 @@ func TestGenerationSSEFailureBoundaries(t *testing.T) {
 					t.Errorf("manufactured stream error or end: %q", recorder.Body.String())
 				}
 			}()
-			forwardGenerationStream(recorder, io.MultiReader(strings.NewReader("data: {\"response\":{\"usageMetadata\":{}}}\n\n"), tail))
+			forwardGenerationStream(context.Background(), recorder, io.MultiReader(strings.NewReader("data: {\"response\":{\"usageMetadata\":{}}}\n\n"), tail))
+		})
+	}
+}
+
+func TestGenerationStreamFailureCategoriesPreserveResponseBoundaries(t *testing.T) {
+	const partial = "data: {\"response\":{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"private-output\"}]}}]}}\n\n"
+	const complete = "data: {\"response\":{\"candidates\":[{\"finishReason\":\"STOP\"}]}}\n\n"
+	for _, test := range []struct {
+		name, category string
+		reader         io.Reader
+		flushError     error
+		abort          bool
+	}{
+		{name: "empty upstream", category: "upstream_incomplete", reader: strings.NewReader("")},
+		{name: "malformed upstream", category: "upstream_invalid_response", reader: strings.NewReader("data: private-upstream-data\n\n")},
+		{name: "upstream read failure", category: "upstream_read_failed", reader: iotest.ErrReader(errors.New("private-error-token"))},
+		{name: "upstream timeout", category: "upstream_timeout", reader: iotest.ErrReader(context.DeadlineExceeded)},
+		{name: "request cancellation", category: "request_canceled", reader: iotest.ErrReader(context.Canceled)},
+		{name: "truncated output", category: "upstream_incomplete", reader: strings.NewReader(partial), abort: true},
+		{name: "downstream flush failure", category: "downstream_flush_failed", reader: strings.NewReader(complete), flushError: errors.New("private-client-error"), abort: true},
+		{name: "downstream timeout", category: "downstream_timeout", reader: strings.NewReader(complete), flushError: context.DeadlineExceeded, abort: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.WithValue(context.Background(), accessStateKey{}, &accessRequestState{})
+			recorder := httptest.NewRecorder()
+			writer := &surfaceControllerWriter{ResponseRecorder: recorder, flushErr: test.flushError}
+			var panicValue any
+			func() {
+				defer func() { panicValue = recover() }()
+				forwardGenerationStream(ctx, writer, test.reader)
+			}()
+			if got := requestStreamFailure(ctx); got != test.category {
+				t.Fatalf("failure category = %q, want %q", got, test.category)
+			}
+			if test.abort {
+				if panicValue != http.ErrAbortHandler || recorder.Code != http.StatusOK {
+					t.Fatalf("committed stream: panic=%v status=%d", panicValue, recorder.Code)
+				}
+				if strings.Contains(recorder.Body.String(), test.category) {
+					t.Fatalf("diagnostic injected into native stream: %s", recorder.Body.String())
+				}
+			} else {
+				if panicValue != nil || recorder.Code != http.StatusBadGateway || !json.Valid(recorder.Body.Bytes()) {
+					t.Fatalf("uncommitted stream: panic=%v status=%d body=%s", panicValue, recorder.Code, recorder.Body.String())
+				}
+				if strings.Contains(recorder.Body.String(), "private-") {
+					t.Fatalf("error response leaked private data: %s", recorder.Body.String())
+				}
+			}
 		})
 	}
 }
@@ -475,7 +525,7 @@ func TestGenerationSSECompletionProofHTTPRuntime(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				forwardGenerationStream(w, strings.NewReader(test.wire))
+				forwardGenerationStream(context.Background(), w, strings.NewReader(test.wire))
 			}))
 			defer server.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
