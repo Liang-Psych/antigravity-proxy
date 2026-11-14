@@ -35,7 +35,7 @@ const DefaultQuotaPollIntervalSeconds = 300
 const DefaultQuotaHistoryMaxSamples = 10000
 
 // DefaultClientVersion identifies the Antigravity client on all upstream requests.
-const DefaultClientVersion = "1.15.8"
+const DefaultClientVersion = "2.32.0"
 
 // DefaultMaxConcurrentGenerations bounds generation requests held in memory.
 const DefaultMaxConcurrentGenerations = 2

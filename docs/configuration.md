@@ -43,7 +43,7 @@ On Unix systems, this file must have owner-only permissions (`chmod 600`). The p
       ]
     }
   ],
-  "clientVersion": "1.15.8",
+  "clientVersion": "2.32.0",
   "maxConcurrentGenerations": 2,
   "quotaPollIntervalSeconds": 300,
   "quotaHistoryMaxSamples": 10000,
@@ -76,7 +76,7 @@ Every setting can be specified or overridden using environment variables:
 | `ANTIGRAVITY_OAUTH_CLIENT_ID` | OAuth Client ID paired with the refresh token | Auto-discovered / Saved |
 | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | OAuth Client Secret paired with the refresh token | Auto-discovered / Saved |
 | `ANTIGRAVITY_PROJECT_ID` | Cloud Code project ID (auto-discovered if empty) | Auto-discovered |
-| `ANTIGRAVITY_CLIENT_VERSION` | Antigravity client version advertised upstream | `1.15.8` |
+| `ANTIGRAVITY_CLIENT_VERSION` | Antigravity client version advertised upstream | `2.32.0` |
 | `ANTIGRAVITY_MAX_CONCURRENT_GENERATIONS` | Maximum parallel in-flight generation requests | `2` |
 | `ANTIGRAVITY_QUOTA_POLL_INTERVAL_SECONDS` | Interval between background quota polls (in seconds) | `300` |
 | `ANTIGRAVITY_QUOTA_HISTORY_MAX_SAMPLES` | Maximum quota observation entries retained | `10000` |
@@ -86,6 +86,32 @@ Every setting can be specified or overridden using environment variables:
 | `OAUTH_CALLBACK_PORT` | Local port for browser OAuth callback | `51121` (falls back to 51122–51126) |
 
 ---
+
+## Troubleshooting Client Version Rejections
+
+Google can reject an outdated advertised client version even when OAuth login and
+model discovery succeed. Generation may return an HTTP 200 response containing
+"This version of Antigravity is no longer supported" instead of an answer.
+Streaming can then end with a truncated-response error because the rejection
+does not contain the normal completion metadata.
+
+This fork defaults to `2.32.0`. Ordinary and streaming Gemini generation were
+verified with that setting on November 14, 2026. The upstream default of `1.15.8`
+was rejected during streaming in that verification.
+
+For an existing installation, set `clientVersion` in
+`~/.config/antigravity-proxy/config.json` to a supported version and restart the
+proxy. A saved value overrides the compiled default, so rebuilding alone does not
+update an existing configuration. To override the saved value for one run:
+
+```sh
+ANTIGRAVITY_CLIENT_VERSION=2.32.0 ./antigravity-proxy serve
+```
+
+This setting changes the version advertised in upstream request headers; it does
+not install or update the Antigravity application. If Google rejects this version
+in the future, check the [official Antigravity changelog](https://antigravity.google/docs/changelog)
+and verify generation with the supported version before updating the setting.
 
 ## Security & Access Control
 

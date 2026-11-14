@@ -7,6 +7,9 @@
 
 **Antigravity Proxy** brings your Antigravity account to Gemini-compatible applications. Run it locally or on your server, sign in with Google, and use a native **Gemini-to-Gemini** connection. It focuses on one thing: making Antigravity available through the Gemini API without converting requests and responses into another provider's format.
 
+This maintenance fork updates the default advertised client version to `2.32.0`
+and documents [version rejection troubleshooting](docs/configuration.md#troubleshooting-client-version-rejections).
+
 This is deliberately **not a universal API translator**. There is no OpenAI or Anthropic conversion layer inside the proxy. Video inputs, tool calls, thinking metadata, thought signatures, and streaming responses stay in Gemini's native format instead of being reshaped to fit another API.
 
 The narrow scope is the point: fewer format conversions, fewer opportunities to lose model-specific features, and a clear job for the proxy to do well. Claude and other models available through Antigravity use the same interface.
@@ -44,7 +47,7 @@ See the [video input guide](docs/api.md#multimodal--video-understanding) for exa
 Requires Go 1.22+:
 
 ```sh
-git clone https://github.com/sortedcord/antigravity-proxy.git
+git clone https://github.com/Liang-Psych/antigravity-proxy.git
 cd antigravity-proxy
 go build -o antigravity-proxy ./cmd/antigravity-proxy
 ```
@@ -97,7 +100,13 @@ curl http://127.0.0.1:8080/v1beta/models/gemini-3.8-flash-tiered:generateContent
   }'
 ```
 
+If generation reports that the Antigravity version is no longer supported, see
+[client version troubleshooting](docs/configuration.md#troubleshooting-client-version-rejections).
+
 ## Running with Docker
+
+The prebuilt image below is published by upstream. Build an image from this fork
+or set `ANTIGRAVITY_CLIENT_VERSION=2.32.0` to use the updated default version.
 
 Run directly using Docker with your existing login config:
 
