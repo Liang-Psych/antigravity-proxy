@@ -42,6 +42,7 @@ func (r *Runtime) setupAdminMux() http.Handler {
 	mux.HandleFunc("POST /admin/accounts/{id}/keys", r.handleAdminCreateKey)
 	mux.HandleFunc("DELETE /admin/accounts/{id}/keys/{keyId}", r.handleAdminDeleteKey)
 
+	mux.HandleFunc("GET /admin/accounts/{id}/models", r.handleAdminAccountModels)
 	mux.HandleFunc("GET /admin/accounts/{id}/quota", r.handleAdminAccountQuota)
 	mux.HandleFunc("GET /admin/accounts/{id}/usage", r.handleAdminAccountUsage)
 	mux.HandleFunc("GET /admin/quota", r.handleAdminQuotaOverview)
@@ -554,6 +555,30 @@ func (r *Runtime) handleAdminDeleteKey(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleAdminAccountModels uses the selected account's existing credential and catalog cache.
+func (r *Runtime) handleAdminAccountModels(w http.ResponseWriter, req *http.Request) {
+	reg := r.registry.Load()
+	if reg == nil {
+		httpjson.Write(w, http.StatusServiceUnavailable, map[string]string{"error": "runtime is not started"})
+		return
+	}
+	id := req.PathValue("id")
+	acc, ok := reg.accounts[id]
+	if !ok || acc == nil {
+		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": fmt.Sprintf("account %q not found", id)})
+		return
+	}
+	if !acc.enabled {
+		httpjson.Write(w, http.StatusForbidden, map[string]string{"error": "account is disabled"})
+		return
+	}
+	if acc.proxy == nil {
+		httpjson.Write(w, http.StatusServiceUnavailable, map[string]string{"error": "model service not configured for account"})
+		return
+	}
+	acc.proxy.handleGeminiModels(w, req)
 }
 
 func (r *Runtime) handleAdminAccountQuota(w http.ResponseWriter, req *http.Request) {

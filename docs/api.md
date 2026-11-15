@@ -429,6 +429,29 @@ Revokes an API key. Requests using this key immediately fail with `401 Unauthori
 
 ### Multi-Account Quota Overview
 
+#### `GET /admin/accounts/{id}/models`
+
+Returns the selected enabled account's upstream-published model catalog in the same Gemini
+format as `/v1beta/models`, including `pageSize` and `pageToken` pagination. Requires the admin
+key; data-plane keys cannot query another account through this route. Each account retains
+its own credentials, project and catalog cache. Unknown accounts return 404, disabled accounts
+403, and unavailable runtimes 503.
+
+The local helper can inspect every enabled account without changing client routing:
+
+```bash
+install -m 755 scripts/agy-models.py ~/.local/bin/agy-models
+agy-models                    # Union of enabled accounts, with source account IDs
+agy-models --account google2  # One specific account
+agy-models --current          # Original client.json API key and its bound account
+```
+
+The helper reads `~/.config/antigravity-proxy/client.json` for the local proxy address and
+`admin-key` for management authentication. It does not mint keys or change client settings.
+Model listing does not combine account permissions: inference still requires the API key of
+an account that supports the chosen model. A partial catalog failure is reported and exits
+nonzero rather than presenting the remaining accounts as a complete result.
+
 #### `GET /admin/quota`
 Returns live quota snapshot across all configured accounts in a single call.
 
