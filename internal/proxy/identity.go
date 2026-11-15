@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"fmt"
 	"runtime"
 	"time"
 )
@@ -41,4 +42,10 @@ func platformNumber() int {
 	default:
 		return 0
 	}
+}
+
+// The CLI family exposes Gemini 4 in discovery and generation. Its version is
+// independent of ClientVersion, which still controls the other client headers.
+func antigravityCLIUserAgent() string {
+	return fmt.Sprintf("antigravity/cli/1.3.4 (os_type=%s; arch=%s; aidev_client; auth_method=oauth)", runtime.GOOS, runtime.GOARCH)
 }

@@ -45,6 +45,7 @@ type upstreamCall struct {
 	body    func() io.Reader
 	length  int64
 	finite  bool
+	cli     bool // CLI family is required for model discovery and Gemini 4
 	poll    bool // quota polling must not wait for an unrelated OAuth refresh
 }
 
@@ -59,6 +60,7 @@ func (p *Proxy) postJSON(ctx context.Context, token, path, project string, paylo
 func jsonUpstreamCall(path, accept, project string, body []byte) upstreamCall {
 	return upstreamCall{
 		path: path, accept: accept, project: project, finite: true,
+		cli:  path == "/v1internal:fetchAvailableModels",
 		body: func() io.Reader { return bytes.NewReader(body) }, length: int64(len(body)),
 	}
 }
@@ -154,6 +156,9 @@ func (p *Proxy) postEncoded(ctx context.Context, endpoint, token string, call up
 	req.ContentLength = call.length
 	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(call.body()), nil }
 	p.setUpstreamHeaders(req, token, call.accept)
+	if call.cli {
+		req.Header.Set("User-Agent", antigravityCLIUserAgent())
+	}
 	recordRequestEndpoint(ctx, endpoint)
 	started := time.Now()
 	resp, err := p.client.Do(req)

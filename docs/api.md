@@ -72,6 +72,14 @@ Administration routes require the `ADMIN_API_KEY`. It can be passed via headers:
 
 Lists all available external generative models dynamically discovered from Google Cloud Code. The list includes Gemini, Claude, and GPT models configured for your account.
 
+Discovery uses the Antigravity CLI client family so Google also returns account-published
+Gemini 4 wire IDs. Generation selects that family only for `gemini-4-*`; other models retain
+the standard client fingerprint. This changes HTTP client identification, not the Gemini
+request body or model ID. Use the exact discovered wire IDs, including tier suffixes.
+Entries explicitly marked `disabled: true` by Google are excluded from this native list;
+the raw `/models` endpoint continues returning Google's unfiltered response.
+
+
 **Query Parameters:**
 - `pageSize`: Optional integer (1–1000, default: 50).
 - `pageToken`: Keyset cursor from a previous `nextPageToken`.

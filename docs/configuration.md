@@ -143,3 +143,11 @@ and verify generation with the supported version before updating the setting.
    fixed labels; raw errors and response content are not recorded. A committed
    stream can still have HTTP status 200 with `aborted: true`: it is terminated
    rather than having a synthetic error or completion inserted into model output.
+
+### Gemini 4 client family
+
+Model discovery and `gemini-4-*` generation use the CLI client-family User-Agent with a pinned
+CLI version of `1.3.4`, verified against Cloud Code Assist on 2026-11-15. Google publishes and
+serves these models according to the client family. Other generation requests keep the existing
+User-Agent based on `clientVersion`; `X-Client-Version` remains based on that setting throughout.
+The OAuth account, project, model wire ID and raw generation JSON are unchanged.

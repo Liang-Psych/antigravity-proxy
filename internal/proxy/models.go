@@ -18,6 +18,7 @@ import (
 // not determine inclusion. Token limits stay raw and descriptive, not request caps.
 type antigravityModelMetadata struct {
 	APIProvider              string          `json:"apiProvider"`
+	Disabled                 bool            `json:"disabled"`
 	IsInternal               bool            `json:"isInternal"`
 	RequiresLeadInGeneration bool            `json:"requiresLeadInGeneration"`
 	DisplayName              string          `json:"displayName"`
@@ -87,7 +88,7 @@ func (p *Proxy) fetchGeminiModels(ctx context.Context, token, projectID string) 
 	}
 	models := make([]geminiModel, 0, len(catalog.Models))
 	for id, metadata := range catalog.Models {
-		if metadata.APIProvider == "" || metadata.APIProvider == "API_PROVIDER_INTERNAL" || metadata.IsInternal || metadata.RequiresLeadInGeneration || tabModels[id] {
+		if metadata.APIProvider == "" || metadata.APIProvider == "API_PROVIDER_INTERNAL" || metadata.Disabled || metadata.IsInternal || metadata.RequiresLeadInGeneration || tabModels[id] {
 			continue
 		}
 		displayName := metadata.DisplayName

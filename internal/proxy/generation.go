@@ -118,6 +118,7 @@ func (p *Proxy) handleGenerateContent(w http.ResponseWriter, r *http.Request, mo
 	}
 	resp, err := p.post(r.Context(), token, upstreamCall{
 		path: path, accept: accept, project: project, body: bodyFactory, length: length,
+		cli: strings.HasPrefix(payload.Model, "gemini-4-"),
 	})
 	if err != nil {
 		writeGeminiUpstreamError(w, err)
