@@ -121,7 +121,7 @@ docker run -d \
   -e API_KEY="my-secret-key" \
   -v "$HOME/.config/antigravity-proxy:/home/app/.config/antigravity-proxy:ro" \
   -v "$HOME/.local/share/antigravity-proxy:/home/app/.local/share/antigravity-proxy" \
-  ghcr.io/sortedcord/antigravity-proxy:latest
+  ghcr.io/liang-psych/antigravity-proxy:latest
 ```
 
 See the [Deployment Guide](docs/deployment.md) for full Docker Compose configurations, non-root user setup, and production hardening.

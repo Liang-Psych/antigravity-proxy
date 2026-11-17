@@ -57,9 +57,8 @@ changelog:
       - Merge branch
 
 release:
-  github:
-    owner: sortedcord
-    name: antigravity-proxy
+  # Owner and name are inferred from the checkout's origin remote, so releases
+  # always publish to the repository that ran the workflow (never upstream).
   prerelease: auto
   mode: replace
   header: |

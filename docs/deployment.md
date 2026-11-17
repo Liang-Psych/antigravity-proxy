@@ -87,7 +87,7 @@ Here is a hardened `compose.yaml` setup for deploying Antigravity Proxy alongsid
 ```yaml
 services:
   antigravity-proxy:
-    image: ghcr.io/sortedcord/antigravity-proxy:latest
+    image: ghcr.io/liang-psych/antigravity-proxy:latest
     container_name: antigravity-proxy
     restart: unless-stopped
     read_only: true
