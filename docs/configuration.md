@@ -43,7 +43,7 @@ On Unix systems, this file must have owner-only permissions (`chmod 600`). The p
       ]
     }
   ],
-  "clientVersion": "2.32.0",
+  "clientVersion": "2.32.1",
   "cliClientVersion": "1.5.10",
   "discoveryClientFamily": "cli",
   "generationClientRules": [{"modelPrefix": "gemini-4-", "family": "cli"}],
@@ -88,7 +88,7 @@ Every setting can be specified or overridden using environment variables:
 | `ANTIGRAVITY_OAUTH_CLIENT_ID` | OAuth Client ID paired with the refresh token | Auto-discovered / Saved |
 | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | OAuth Client Secret paired with the refresh token | Auto-discovered / Saved |
 | `ANTIGRAVITY_PROJECT_ID` | Cloud Code project ID (auto-discovered if empty) | Auto-discovered |
-| `ANTIGRAVITY_CLIENT_VERSION` | Standard client version and `X-Client-Version` header | `2.32.0` |
+| `ANTIGRAVITY_CLIENT_VERSION` | Standard client version and `X-Client-Version` header | `2.32.1` |
 | `ANTIGRAVITY_CLI_CLIENT_VERSION` | CLI-family User-Agent version | `1.5.10` |
 | `ANTIGRAVITY_DISCOVERY_CLIENT_FAMILY` | Model discovery identity: `standard` or `cli` | `cli` |
 | `ANTIGRAVITY_GENERATION_CLIENT_RULES` | JSON array of ordered model-prefix rules | `[{"modelPrefix":"gemini-4-","family":"cli"}]` |
@@ -110,7 +110,7 @@ model discovery succeed. Generation may return an HTTP 200 response containing
 Streaming can then end with a truncated-response error because the rejection
 does not contain the normal completion metadata.
 
-This fork defaults to `2.32.0`, following the latest Antigravity App release in
+This fork defaults to `2.32.1`, following the latest Antigravity App release in
 the [official Antigravity changelog](https://antigravity.google/docs/changelog);
 see [Automatic Client Version Updates](client-version-updates.md). Ordinary and
 streaming Gemini generation were verified with App identity `2.32.0` on November
@@ -123,7 +123,7 @@ proxy. A saved value overrides the compiled default, so rebuilding alone does no
 update an existing configuration. To override the saved value for one run:
 
 ```sh
-ANTIGRAVITY_CLIENT_VERSION=2.32.0 ./antigravity-proxy serve
+ANTIGRAVITY_CLIENT_VERSION=2.32.1 ./antigravity-proxy serve
 ```
 
 This setting changes the version advertised in upstream request headers; it does
