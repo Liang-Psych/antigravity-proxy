@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.3.0](https://github.com/Liang-Psych/antigravity-proxy/compare/v0.2.0...v0.3.0) (2026-11-17)
+
+
+### Features
+
+* configure client identity and preserve sanitized diagnostics ([66afb0f](https://github.com/Liang-Psych/antigravity-proxy/commit/66afb0f7a3ae0d3c50dbfdaaeae2cf967f56a5f1))
+* inspect model catalogs across configured accounts ([bb97c49](https://github.com/Liang-Psych/antigravity-proxy/commit/bb97c4943e3d461b9e62f10382e5431d2a61d91c))
+* log bounded diagnostics for failed generation streams ([8b53a10](https://github.com/Liang-Psych/antigravity-proxy/commit/8b53a10063bd85de7432aafcde6270e57a045578))
+* **proxy:** queue generation bursts and bound capacity per account ([5cbd80a](https://github.com/Liang-Psych/antigravity-proxy/commit/5cbd80aa1d3bc46582605302dd30df4d44283bac))
+
+
+### Bug Fixes
+
+* **ci:** use Go 1.27.4 for patched standard library ([e7d93fc](https://github.com/Liang-Psych/antigravity-proxy/commit/e7d93fc3235b09eb0e85bb8ac18a36584ef6e0f3))
+* **config:** update advertised Antigravity client version ([9860435](https://github.com/Liang-Psych/antigravity-proxy/commit/98604353aee1d9d1c1abaec1a416ecc0796213d3))
+* discover and call Gemini 4 with the CLI client family ([df114dd](https://github.com/Liang-Psych/antigravity-proxy/commit/df114dde6c9ec4e9844c8a81231985868299caf8))
+* **oauth:** compare token expiry by wall clock across system sleep ([7385180](https://github.com/Liang-Psych/antigravity-proxy/commit/73851808765cbbf4083422900a3f114972648538))
+* **proxy:** clarify unsupported interactions and stream failures ([a670912](https://github.com/Liang-Psych/antigravity-proxy/commit/a670912a9cf53d5ca2053dfccdbbb8c7de405de6))
+* **proxy:** recover once from rejected OAuth tokens ([bd42e76](https://github.com/Liang-Psych/antigravity-proxy/commit/bd42e762fa8c886f9c109c6015c7ddbbc11880d7))
+* **release:** let Release Please bump the executable version ([eb9b1ef](https://github.com/Liang-Psych/antigravity-proxy/commit/eb9b1ef7f9b6df881247ba8b0101f93cf1468c1e))
+* update default CLI client identity to 1.5.10 ([6e490d5](https://github.com/Liang-Psych/antigravity-proxy/commit/6e490d5b86f077ebe659b3b113880c748eeb0223))
+
 ## [0.2.0](https://github.com/terastal-hq/antigravity-proxy/compare/v0.1.0...v0.2.0) (2026-10-16)
 
 
