@@ -7,7 +7,7 @@
 
 **Antigravity Proxy** brings your Antigravity account to Gemini-compatible applications. Run it locally or on your server, sign in with Google, and use a native **Gemini-to-Gemini** connection. It focuses on one thing: making Antigravity available through the Gemini API without converting requests and responses into another provider's format.
 
-This maintenance fork updates the default advertised client version to `2.32.0`
+This maintenance fork updates the default advertised client version to `2.32.1`
 and documents [version rejection troubleshooting](docs/configuration.md#troubleshooting-client-version-rejections).
 
 This is deliberately **not a universal API translator**. There is no OpenAI or Anthropic conversion layer inside the proxy. Video inputs, tool calls, thinking metadata, thought signatures, and streaming responses stay in Gemini's native format instead of being reshaped to fit another API.
@@ -106,7 +106,7 @@ If generation reports that the Antigravity version is no longer supported, see
 ## Running with Docker
 
 The prebuilt image below is published by upstream. Build an image from this fork
-or set `ANTIGRAVITY_CLIENT_VERSION=2.32.0` to use the updated default version.
+or set `ANTIGRAVITY_CLIENT_VERSION=2.32.1` to use the updated default version.
 
 Run directly using Docker with your existing login config:
 
