@@ -22,7 +22,7 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X antigravity-proxy/internal/buildinfo.Version={{ .Version }}
+      - -X antigravity-proxy/internal/buildinfo.Version={{ .Tag }}
       - -X antigravity-proxy/internal/buildinfo.Commit={{ .Commit }}
       - -X antigravity-proxy/internal/buildinfo.Date={{ .CommitDate }}
 
