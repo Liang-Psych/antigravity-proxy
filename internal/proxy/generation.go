@@ -354,9 +354,10 @@ func encodeGenerationSSEEvent(event generationSSEEvent, data []byte) []byte {
 // Completion requires all observed candidates to finish, a native error, or a
 // blocked prompt with no candidates; EOF and [DONE] are transport-only markers.
 type generationStreamCompletion struct {
-	candidates  map[int]bool
-	nativeError bool
-	blocked     bool
+	candidates    map[int]bool
+	finishReasons map[string]bool
+	nativeError   bool
+	blocked       bool
 }
 
 func (completion *generationStreamCompletion) observe(data []byte) error {
@@ -388,6 +389,12 @@ func (completion *generationStreamCompletion) observe(data []byte) error {
 			index = *candidate.Index
 		}
 		completion.candidates[index] = completion.candidates[index] || candidate.FinishReason != ""
+		if candidate.FinishReason != "" {
+			if completion.finishReasons == nil {
+				completion.finishReasons = make(map[string]bool)
+			}
+			completion.finishReasons[diagnosticFinishReason(candidate.FinishReason)] = true
+		}
 	}
 	return nil
 }
@@ -414,6 +421,7 @@ func forwardGenerationStream(ctx context.Context, w http.ResponseWriter, body io
 	// an HTTP error status.
 	committed := false
 	var completion generationStreamCompletion
+	var observation streamFailureDiagnostics
 	var pending bytes.Buffer
 	fail := func(category string, err error) {
 		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
@@ -425,7 +433,10 @@ func forwardGenerationStream(ctx context.Context, w http.ResponseWriter, body io
 				category = "upstream_timeout"
 			}
 		}
-		recordStreamFailure(ctx, category)
+		if observation.EndedBy == "" {
+			observation.EndedBy = category
+		}
+		recordStreamFailure(ctx, category, completion.diagnostics(observation))
 		if committed {
 			// net/http aborts the response (HTTP/2 resets the stream); never
 			// convert a truncated or malformed upstream stream to success.
@@ -434,14 +445,22 @@ func forwardGenerationStream(ctx context.Context, w http.ResponseWriter, body io
 		writeGeminiError(w, http.StatusBadGateway, "invalid generation stream from Google upstream")
 	}
 	for {
+		observation.EndedBy = ""
 		event, readErr := readGenerationSSEEvent(reader)
+		if readErr == io.EOF {
+			observation.SawEOF = true
+			observation.EndedBy = "eof"
+		}
 		if readErr != nil && readErr != io.EOF {
 			fail("upstream_read_failed", readErr)
 			return
 		}
 		var data []byte
 		if event.hasData {
+			observation.DataEvents++
 			if bytes.Equal(bytes.TrimSpace(event.data), []byte("[DONE]")) {
+				observation.SawDone = true
+				observation.EndedBy = "done"
 				if !committed || !completion.complete() {
 					fail("upstream_incomplete", io.ErrUnexpectedEOF)
 					return
@@ -457,6 +476,7 @@ func forwardGenerationStream(ctx context.Context, w http.ResponseWriter, body io
 				fail("upstream_invalid_response", err)
 				return
 			}
+			observation.JSONEvents++
 			if err := completion.observe(data); err != nil {
 				fail("upstream_invalid_metadata", err)
 				return

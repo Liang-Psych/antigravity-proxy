@@ -14,10 +14,11 @@ import (
 type accessStateKey struct{}
 
 type accessRequestState struct {
-	id            string
-	mu            sync.Mutex
-	endpoint      string
-	streamFailure string
+	id               string
+	mu               sync.Mutex
+	endpoint         string
+	streamFailure    string
+	streamDiagnostic *streamFailureDiagnostics
 }
 
 // recordRequestEndpoint records only the endpoint origin, never credentials,
@@ -47,13 +48,14 @@ func requestEndpoint(ctx context.Context) string {
 }
 
 // Record only fixed failure categories, never error text or streamed content.
-func recordStreamFailure(ctx context.Context, category string) {
+func recordStreamFailure(ctx context.Context, category string, diagnostic streamFailureDiagnostics) {
 	state, _ := ctx.Value(accessStateKey{}).(*accessRequestState)
 	if state == nil {
 		return
 	}
 	state.mu.Lock()
 	state.streamFailure = category
+	state.streamDiagnostic = &diagnostic
 	state.mu.Unlock()
 }
 
@@ -65,6 +67,17 @@ func requestStreamFailure(ctx context.Context) string {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	return state.streamFailure
+}
+
+func requestStreamDiagnostic(ctx context.Context) *streamFailureDiagnostics {
+	state, _ := ctx.Value(accessStateKey{}).(*accessRequestState)
+	if state == nil {
+		return nil
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	// Published once by the stream handler and immutable thereafter.
+	return state.streamDiagnostic
 }
 
 func ensureRequestID(w http.ResponseWriter, r *http.Request) (*http.Request, error) {
@@ -150,7 +163,7 @@ func (p *Proxy) serveWithAccessLogScoped(w http.ResponseWriter, r *http.Request,
 			"aborted", panicValue != nil || r.Context().Err() != nil,
 		}
 		if failure := requestStreamFailure(r.Context()); failure != "" {
-			attrs = append(attrs, "stream_failure", failure)
+			attrs = append(attrs, "stream_failure", failure, "stream_diagnostic", requestStreamDiagnostic(r.Context()))
 		}
 		if accountID != "" {
 			attrs = append([]any{"account", accountID}, attrs...)

@@ -114,6 +114,10 @@ func TestAccessLogRecordsStreamAbortWithoutSuppressingPanic(t *testing.T) {
 	if entry["aborted"] != true || entry["status"] != float64(200) || entry["stream_failure"] != "upstream_incomplete" || strings.Contains(logs.String(), "partial-secret") {
 		t.Fatalf("abort log = %s", logs.String())
 	}
+	diagnostic, ok := entry["stream_diagnostic"].(map[string]any)
+	if !ok || diagnostic["data_events"] != float64(1) || diagnostic["json_events"] != float64(1) || diagnostic["ended_by"] != "eof" || diagnostic["saw_eof"] != true || diagnostic["saw_done"] != false || diagnostic["saw_finish_reason"] != false {
+		t.Fatalf("missing or incorrect stream failure diagnostics: %s", logs.String())
+	}
 }
 
 func TestSanitizedErrorsAcrossHTTPRoutes(t *testing.T) {

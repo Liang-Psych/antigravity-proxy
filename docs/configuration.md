@@ -150,6 +150,24 @@ and verify generation with the supported version before updating the setting.
    stream can still have HTTP status 200 with `aborted: true`: it is terminated
    rather than having a synthetic error or completion inserted into model output.
 
+   Failed streams also attach a bounded `stream_diagnostic` object to the same
+   access-log entry. `data_events` counts received SSE events containing data
+   (including `[DONE]`); `json_events` counts successfully unwrapped native JSON
+   events, even if their metadata then fails validation. `ended_by` records `eof`,
+   `done`, or a fixed failure category. `saw_eof` and `saw_done` independently
+   identify transport markers observed before failure. `saw_finish_reason` and
+   sorted `finish_reasons` show whether any native completion reason was seen;
+   only known enum labels are recorded, with other strings replaced by `OTHER`.
+
+   `candidate_count`, `finished_candidates`, and up to the lowest 16
+   `unfinished_candidate_indices` summarize completion. A larger list sets
+   `unfinished_indices_truncated`. `native_error` and `prompt_blocked` are booleans
+   only. Existing `request_id`, `duration`, and `stream_failure` correlate this
+   summary with the request. No response text, signatures, tool arguments, raw
+   error messages or request bodies are retained. Successful streams omit this
+   object. These observations help diagnosis; absent finish metadata alone does
+   not prove whether the provider truncated the response or changed its format.
+
 ## Client Family Rules
 
 The [automatic update workflow](cli-version-updates.md) proposes newer stable versions through tested PRs.
