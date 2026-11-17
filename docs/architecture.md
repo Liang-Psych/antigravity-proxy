@@ -60,6 +60,12 @@ The proxy's `internal/oauth` package uses the official consumer OAuth client cre
 3. **Storage**: Tokens and the paired OAuth client credentials are saved to `~/.config/antigravity-proxy/config.json` with `0600` permissions.
 4. **Serving**: At runtime, access tokens are refreshed automatically in memory before expiration. Tokens are never written back to disk during normal serving.
 
+Concurrent requests for the same account share one OAuth refresh, including recovery
+after an upstream 401. Each request can cancel its own wait immediately; the refresh
+continues for other waiters and is canceled when the last waiter leaves. Refreshes
+have a 30-second total deadline. Quota polls skip an already active refresh and retry
+on a later poll. Failed or abandoned refreshes cannot replace the cached token.
+
 ---
 
 ## 3. Project Discovery & Onboarding
