@@ -398,3 +398,27 @@ func TestResolveLoginCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestTokenExpiryUsesWallClockAcrossSystemSleep(t *testing.T) {
+	now := time.Now()
+	if !strings.Contains(now.String(), "m=") {
+		t.Skip("platform clock has no monotonic reading")
+	}
+	for _, test := range []struct {
+		tokens Tokens
+		want   time.Duration
+	}{
+		{Tokens{ExpiresIn: 3599}, 3599 * time.Second},
+		{Tokens{}, time.Hour},
+	} {
+		expiry := test.tokens.Expiry(now)
+		// A monotonic reading would make time.Until ignore wall time spent in
+		// macOS sleep, reusing an access token Google has already expired.
+		if strings.Contains(expiry.String(), "m=") {
+			t.Fatalf("expiry retains monotonic clock: %s", expiry)
+		}
+		if !expiry.Equal(now.Add(test.want)) {
+			t.Fatalf("expiry = %s, want %s", expiry, now.Add(test.want))
+		}
+	}
+}

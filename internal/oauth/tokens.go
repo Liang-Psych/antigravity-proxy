@@ -13,10 +13,14 @@ const (
 // Expiry converts a provider lifetime without overflowing time.Duration. Missing
 // or unusable lifetimes use the consumer's conventional one-hour lifetime.
 // Known absolute expiry times must be copied directly, not passed through here.
+//
+// The result carries no monotonic clock reading. Google expires tokens by wall
+// time, while Go's monotonic clock stops during macOS system sleep; comparing a
+// monotonic expiry after wake would treat an expired token as fresh.
 func (tokens Tokens) Expiry(now time.Time) time.Time {
 	const maxSeconds = int64((1<<63 - 1) / time.Second)
 	if tokens.ExpiresIn <= 0 || tokens.ExpiresIn > maxSeconds {
-		return now.Add(defaultTokenLifetime)
+		return now.Add(defaultTokenLifetime).Round(0)
 	}
-	return now.Add(time.Duration(tokens.ExpiresIn) * time.Second)
+	return now.Add(time.Duration(tokens.ExpiresIn) * time.Second).Round(0)
 }
