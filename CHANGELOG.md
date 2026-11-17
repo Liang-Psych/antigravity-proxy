@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/Liang-Psych/antigravity-proxy/compare/v0.3.0...v0.3.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **proxy:** stop blaming Google for client cancellations and refresh catalogs after 404 ([d31a5f7](https://github.com/Liang-Psych/antigravity-proxy/commit/d31a5f7cc5b8bfc7c5f2ec8f2f8032efe0c0418d))
+* update default App client identity to 2.32.1 ([#2](https://github.com/Liang-Psych/antigravity-proxy/issues/2)) ([97a91fc](https://github.com/Liang-Psych/antigravity-proxy/commit/97a91fc2362d163fd8c8ac35827b0efb60f211e7))
+
 ## [0.3.0](https://github.com/Liang-Psych/antigravity-proxy/compare/v0.2.0...v0.3.0) (2026-11-17)
 
 
