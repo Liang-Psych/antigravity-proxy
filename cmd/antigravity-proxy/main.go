@@ -39,6 +39,8 @@ func run(args []string, output io.Writer) error {
 		variables := config.EnvironmentVariables()
 		defaults := map[string]any{
 			"ANTIGRAVITY_CLIENT_VERSION":              config.DefaultClientVersion,
+			"ANTIGRAVITY_CLI_CLIENT_VERSION":          config.DefaultCLIClientVersion,
+			"ANTIGRAVITY_DISCOVERY_CLIENT_FAMILY":     config.ClientFamilyCLI,
 			"ANTIGRAVITY_MAX_CONCURRENT_GENERATIONS":  config.DefaultMaxConcurrentGenerations,
 			"ANTIGRAVITY_QUOTA_POLL_INTERVAL_SECONDS": config.DefaultQuotaPollIntervalSeconds,
 			"ANTIGRAVITY_QUOTA_HISTORY_MAX_SAMPLES":   config.DefaultQuotaHistoryMaxSamples,

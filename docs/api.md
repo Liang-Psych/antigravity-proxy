@@ -465,3 +465,46 @@ Returns live quota snapshot across all configured accounts in a single call.
 
 #### `GET /admin/accounts/{id}/quota` and `GET /admin/accounts/{id}/usage`
 Inspects live bucket limits and historical observations for a specific account without requiring that account's API key.
+
+## Sanitized Error Diagnostics
+
+Non-success upstream HTTP responses retain their HTTP status and the existing
+Gemini `error.code`, `error.message`, and `error.status` fields, and add
+`error.diagnostic`. For example:
+
+```json
+{
+  "error": {
+    "code": 400,
+    "message": "Google upstream request failed",
+    "status": "INVALID_ARGUMENT",
+    "diagnostic": {
+      "origin": "upstream",
+      "category": "invalid_request",
+      "action": "Check the native Gemini request fields and model capabilities.",
+      "fields": ["generationConfig.thinkingConfig.thinkingBudget"]
+    }
+  }
+}
+```
+
+Categories include `invalid_request`, `authentication_failed`, `permission_denied`,
+`not_found`, `rate_limited`, `client_version_rejected`, and `upstream_error`.
+Version rejection is a diagnostic hint, not a trigger for automatic replay.
+Local generation-capacity 429 responses instead use `origin: "proxy"` and
+`category: "generation_capacity_exhausted"`.
+
+Provider error bodies are read with a 16 KiB / 100 ms bound and discarded after
+classification. Field paths use an allowlist of native schema segments; arbitrary
+property names, descriptions, account/project identifiers, and raw messages are
+omitted. Up to 16 distinct paths are retained. Validated Google `RetryInfo` delays
+are exposed as `retry_delay_seconds` (rounded up, at most seven days), and supply
+`Retry-After` only when no valid upstream header exists. Malformed, oversized or
+slow error bodies fall back to status-only classification. None of this changes
+successful response bodies or committed streams.
+
+The admin `GET /admin/accounts/{id}/models` response adds `client_identity` alongside
+the usual `models` and `nextPageToken`. It contains `discovery_family`,
+`standard_version`, `cli_version`, and a `generation_families` map keyed by model
+name for the current page. Data-key model routes do not include this management
+metadata. The values describe configured transport identity, not model health.

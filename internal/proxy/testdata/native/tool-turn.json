@@ -1,0 +1,14 @@
+{
+  "candidates": [{
+    "content": {
+      "role": "model",
+      "parts": [
+        {"thought": true, "thoughtSignature": "synthetic-opaque+/=="},
+        {"functionCall": {"name": "fixture_lookup", "args": {"id": 9007199254740993123, "future": {"value": 1.000e+40}}}}
+      ]
+    },
+    "finishReason": "STOP"
+  }],
+  "usageMetadata": {"thoughtsTokenCount": 7},
+  "futureResponse": {"preserve": true}
+}

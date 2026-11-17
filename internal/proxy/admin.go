@@ -578,7 +578,7 @@ func (r *Runtime) handleAdminAccountModels(w http.ResponseWriter, req *http.Requ
 		httpjson.Write(w, http.StatusServiceUnavailable, map[string]string{"error": "model service not configured for account"})
 		return
 	}
-	acc.proxy.handleGeminiModels(w, req)
+	acc.proxy.writeGeminiModels(w, req, true)
 }
 
 func (r *Runtime) handleAdminAccountQuota(w http.ResponseWriter, req *http.Request) {

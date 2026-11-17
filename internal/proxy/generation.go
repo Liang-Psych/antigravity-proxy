@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"antigravity-proxy/internal/config"
 	"bufio"
 	"bytes"
 	"context"
@@ -70,7 +71,7 @@ func (p *Proxy) handleGenerateContent(w http.ResponseWriter, r *http.Request, mo
 	default:
 		rejectUnreadBody(w, r)
 		w.Header().Set("Retry-After", "1")
-		writeGeminiError(w, http.StatusTooManyRequests, "generation capacity exhausted")
+		writeGeminiDiagnosticError(w, http.StatusTooManyRequests, "generation capacity exhausted", &upstreamDiagnostic{Origin: "proxy", Category: "generation_capacity_exhausted", Action: "Reduce concurrent requests or adjust maxConcurrentGenerations."})
 		return
 	}
 	var err error
@@ -118,7 +119,7 @@ func (p *Proxy) handleGenerateContent(w http.ResponseWriter, r *http.Request, mo
 	}
 	resp, err := p.post(r.Context(), token, upstreamCall{
 		path: path, accept: accept, project: project, body: bodyFactory, length: length,
-		cli: strings.HasPrefix(payload.Model, "gemini-4-"),
+		cli: p.cfg.GenerationClientFamily(payload.Model) == config.ClientFamilyCLI,
 	})
 	if err != nil {
 		writeGeminiUpstreamError(w, err)

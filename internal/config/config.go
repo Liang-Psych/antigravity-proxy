@@ -94,7 +94,10 @@ type Config struct {
 	// ClientVersion is shared by generation and quota upstream transports.
 	ClientVersion string `json:"clientVersion,omitempty"`
 	// MaxConcurrentGenerations bounds simultaneously processed generation requests.
-	MaxConcurrentGenerations int `json:"maxConcurrentGenerations,omitempty"`
+	MaxConcurrentGenerations int                `json:"maxConcurrentGenerations,omitempty"`
+	CLIClientVersion         string             `json:"cliClientVersion,omitempty"`
+	DiscoveryClientFamily    string             `json:"discoveryClientFamily,omitempty"`
+	GenerationClientRules    []ClientFamilyRule `json:"generationClientRules"`
 }
 
 // HasCredentials returns true if credentials are configured at top-level or on any account.
@@ -167,6 +170,9 @@ func defaults(home string) Config {
 		QuotaHistoryPath:         filepath.Join(home, ".local", "share", "antigravity-proxy", "usage.jsonl"),
 		QuotaHistoryMaxSamples:   DefaultQuotaHistoryMaxSamples,
 		ClientVersion:            DefaultClientVersion,
+		CLIClientVersion:         DefaultCLIClientVersion,
+		DiscoveryClientFamily:    ClientFamilyCLI,
+		GenerationClientRules:    defaultClientRules(),
 		MaxConcurrentGenerations: DefaultMaxConcurrentGenerations,
 	}
 }
@@ -231,6 +237,18 @@ func (cfg *Config) applyEnvironment() error {
 		}
 	}
 	envString("ANTIGRAVITY_CLIENT_VERSION", &cfg.ClientVersion)
+	envString("ANTIGRAVITY_CLI_CLIENT_VERSION", &cfg.CLIClientVersion)
+	envString("ANTIGRAVITY_DISCOVERY_CLIENT_FAMILY", &cfg.DiscoveryClientFamily)
+	if value, ok := os.LookupEnv("ANTIGRAVITY_GENERATION_CLIENT_RULES"); ok {
+		decoder := json.NewDecoder(strings.NewReader(value))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&cfg.GenerationClientRules); err != nil || cfg.GenerationClientRules == nil {
+			return fmt.Errorf("ANTIGRAVITY_GENERATION_CLIENT_RULES must be a JSON array of client family rules")
+		}
+		if err := decoder.Decode(new(json.RawMessage)); err != io.EOF {
+			return fmt.Errorf("ANTIGRAVITY_GENERATION_CLIENT_RULES must contain exactly one JSON array")
+		}
+	}
 
 	if apiKey, ok := os.LookupEnv("API_KEY"); ok && apiKey != "" {
 		cfg.Env.HasAPIKey = true
@@ -321,8 +339,8 @@ func (cfg Config) Validate() error {
 	if cfg.MaxConcurrentGenerations <= 0 {
 		return fmt.Errorf("maxConcurrentGenerations must be a positive integer")
 	}
-	if cfg.ClientVersion == "" {
-		return fmt.Errorf("clientVersion must not be empty")
+	if err := cfg.validateClientIdentity(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -339,6 +357,15 @@ func ValidatePollInterval(seconds int) error {
 // WithProxyDefaults fills the optional settings accepted by direct constructors.
 // Load instead validates explicit zero/negative resource settings as errors.
 func (cfg Config) WithProxyDefaults() Config {
+	if cfg.CLIClientVersion == "" {
+		cfg.CLIClientVersion = DefaultCLIClientVersion
+	}
+	if cfg.DiscoveryClientFamily == "" {
+		cfg.DiscoveryClientFamily = ClientFamilyCLI
+	}
+	if cfg.GenerationClientRules == nil {
+		cfg.GenerationClientRules = defaultClientRules()
+	}
 	if cfg.ClientVersion == "" {
 		cfg.ClientVersion = DefaultClientVersion
 	}

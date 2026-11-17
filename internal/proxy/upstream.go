@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"antigravity-proxy/internal/config"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -19,6 +20,7 @@ type upstreamError struct {
 	Status         int
 	Headers        http.Header
 	projectFailure bool
+	Diagnostic     upstreamDiagnostic
 }
 
 // Error deliberately never retains provider bodies, URLs, or credentials.
@@ -156,8 +158,15 @@ func (p *Proxy) postEncoded(ctx context.Context, endpoint, token string, call up
 	req.ContentLength = call.length
 	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(call.body()), nil }
 	p.setUpstreamHeaders(req, token, call.accept)
+	family := config.ClientFamilyStandard
 	if call.cli {
-		req.Header.Set("User-Agent", antigravityCLIUserAgent())
+		family = config.ClientFamilyCLI
+	}
+	if call.path == "/v1internal:fetchAvailableModels" {
+		family = p.cfg.DiscoveryClientFamily
+	}
+	if family == config.ClientFamilyCLI {
+		req.Header.Set("User-Agent", antigravityCLIUserAgent(p.cfg.CLIClientVersion))
 	}
 	recordRequestEndpoint(ctx, endpoint)
 	started := time.Now()
@@ -180,23 +189,29 @@ func (p *Proxy) postEncoded(ctx context.Context, endpoint, token string, call up
 		transferred = true
 		return resp, nil
 	}
-	// Inspect only a tiny, time-bounded structured error. Classification retains
-	// a boolean, never provider text, resource identifiers or arbitrary metadata.
+	// Bound both size and time for every error response. Retain only sanitized
+	// classifications; never keep the provider body on the error object.
 	projectFailure := false
+	timer := time.AfterFunc(100*time.Millisecond, cancel)
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, (16<<10)+1))
+	timer.Stop()
+	if readErr != nil || len(body) > 16<<10 {
+		body = nil
+	}
 	if call.project != "" && (resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound) {
-		timer := time.AfterFunc(100*time.Millisecond, cancel)
-		body, readErr := io.ReadAll(io.LimitReader(resp.Body, (16<<10)+1))
-		timer.Stop()
-		if readErr == nil && len(body) <= 16<<10 {
-			projectFailure = rejectedProject(body, call.project, resp.StatusCode)
-		}
+		projectFailure = rejectedProject(body, call.project, resp.StatusCode)
+	}
+	diagnostic := diagnoseUpstream(resp.StatusCode, body)
+	headers := safeUpstreamHeaders(resp.Header)
+	if headers.Get("Retry-After") == "" && diagnostic.RetryDelaySeconds > 0 {
+		headers.Set("Retry-After", strconv.FormatInt(diagnostic.RetryDelaySeconds, 10))
 	}
 	_ = resp.Body.Close()
 	slog.Warn("upstream request rejected", "endpoint", label, "route", route, "status", resp.StatusCode, "duration", time.Since(started))
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	return nil, &upstreamError{Status: resp.StatusCode, Headers: safeUpstreamHeaders(resp.Header), projectFailure: projectFailure}
+	return nil, &upstreamError{Status: resp.StatusCode, Headers: headers, projectFailure: projectFailure, Diagnostic: diagnostic}
 }
 
 // rejectedProject accepts only typed Google details that identify this project's

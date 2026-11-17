@@ -44,6 +44,9 @@ On Unix systems, this file must have owner-only permissions (`chmod 600`). The p
     }
   ],
   "clientVersion": "2.32.0",
+  "cliClientVersion": "1.3.4",
+  "discoveryClientFamily": "cli",
+  "generationClientRules": [{"modelPrefix": "gemini-4-", "family": "cli"}],
   "maxConcurrentGenerations": 2,
   "quotaPollIntervalSeconds": 300,
   "quotaHistoryMaxSamples": 10000,
@@ -85,7 +88,10 @@ Every setting can be specified or overridden using environment variables:
 | `ANTIGRAVITY_OAUTH_CLIENT_ID` | OAuth Client ID paired with the refresh token | Auto-discovered / Saved |
 | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | OAuth Client Secret paired with the refresh token | Auto-discovered / Saved |
 | `ANTIGRAVITY_PROJECT_ID` | Cloud Code project ID (auto-discovered if empty) | Auto-discovered |
-| `ANTIGRAVITY_CLIENT_VERSION` | Antigravity client version advertised upstream | `2.32.0` |
+| `ANTIGRAVITY_CLIENT_VERSION` | Standard client version and `X-Client-Version` header | `2.32.0` |
+| `ANTIGRAVITY_CLI_CLIENT_VERSION` | CLI-family User-Agent version | `1.3.4` |
+| `ANTIGRAVITY_DISCOVERY_CLIENT_FAMILY` | Model discovery identity: `standard` or `cli` | `cli` |
+| `ANTIGRAVITY_GENERATION_CLIENT_RULES` | JSON array of ordered model-prefix rules | `[{"modelPrefix":"gemini-4-","family":"cli"}]` |
 | `ANTIGRAVITY_MAX_CONCURRENT_GENERATIONS` | Maximum parallel in-flight generation requests | `2` |
 | `ANTIGRAVITY_QUOTA_POLL_INTERVAL_SECONDS` | Interval between background quota polls (in seconds) | `300` |
 | `ANTIGRAVITY_QUOTA_HISTORY_MAX_SAMPLES` | Maximum quota observation entries retained | `10000` |
@@ -144,10 +150,42 @@ and verify generation with the supported version before updating the setting.
    stream can still have HTTP status 200 with `aborted: true`: it is terminated
    rather than having a synthetic error or completion inserted into model output.
 
-### Gemini 4 client family
+## Client Family Rules
 
-Model discovery and `gemini-4-*` generation use the CLI client-family User-Agent with a pinned
-CLI version of `1.3.4`, verified against Cloud Code Assist on 2026-11-15. Google publishes and
-serves these models according to the client family. Other generation requests keep the existing
-User-Agent based on `clientVersion`; `X-Client-Version` remains based on that setting throughout.
-The OAuth account, project, model wire ID and raw generation JSON are unchanged.
+Defaults preserve the previously verified behavior: discovery uses the CLI family,
+`gemini-4-*` generation uses CLI, and unmatched models use standard identity.
+`cliClientVersion` controls only the CLI User-Agent; `clientVersion` still controls
+`X-Client-Version` for both families. These settings do not change OAuth clients,
+model IDs, project IDs, or native generation payloads.
+
+Rules match case-sensitive prefixes in order; the first match wins. An empty
+prefix matches all models. An explicit empty array disables generation CLI rules;
+an omitted or null list uses the default Gemini 4 rule. For example:
+
+```json
+{
+  "cliClientVersion": "1.3.4",
+  "discoveryClientFamily": "cli",
+  "generationClientRules": [
+    {"modelPrefix": "gemini-4-special", "family": "standard"},
+    {"modelPrefix": "gemini-4-", "family": "cli"}
+  ]
+}
+```
+
+The three new environment variables override saved values. For one run:
+
+```sh
+ANTIGRAVITY_CLI_CLIENT_VERSION=1.3.4 \
+ANTIGRAVITY_GENERATION_CLIENT_RULES='[{"modelPrefix":"gemini-4-","family":"cli"}]' \
+./antigravity-proxy serve
+```
+
+Restart after editing these settings. The admin account model catalog includes
+`client_identity` with discovery family, both versions, and generation families
+for the current page. The public Gemini catalog remains unchanged. A model being
+listed does not prove generation works; use the [compatibility checks](compatibility.md).
+
+Version-rejection diagnostics describe non-success HTTP errors only. A provider
+message inside a successful native response remains untouched; stream failures
+continue to be reported by transport interruption rather than injected content.

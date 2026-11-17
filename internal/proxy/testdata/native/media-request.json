@@ -1,0 +1,9 @@
+{
+  "contents": [{"role": "user", "parts": [
+    {"inlineData": {"mimeType": "video/mp4", "data": "c3ludGhldGljLXZpZGVvLWZpeHR1cmU="}, "videoMetadata": {"fps": 1, "startOffset": "0s", "endOffset": "1s"}},
+    {"inlineData": {"mimeType": "image/png", "data": "c3ludGhldGljLWltYWdlLWZpeHR1cmU="}},
+    {"text": "Synthetic transport fixture"}
+  ]}],
+  "generationConfig": {"responseMimeType": "application/json", "responseJsonSchema": {"type": "object", "properties": {"count": {"type": "integer"}}, "required": ["count"]}},
+  "futureRequest": {"integer": 9007199254740993123, "decimal": 1.000e+40}
+}

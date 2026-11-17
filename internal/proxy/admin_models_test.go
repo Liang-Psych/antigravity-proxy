@@ -169,3 +169,25 @@ func TestAdminAccountModelsAdmissionAndUnavailableStates(t *testing.T) {
 		t.Fatalf("unstarted runtime models status = %d", response.Code)
 	}
 }
+
+func TestAdminCatalogExposesTransportIdentityOnlyToAdmin(t *testing.T) {
+	r, adminKey, workKey, _, _, _ := newAdminModelsTestRuntime(t)
+	admin := adminModelsTestRequest(r, "/admin/accounts/work/models", adminKey)
+	var result struct {
+		ClientIdentity struct {
+			Discovery string            `json:"discovery_family"`
+			CLI       string            `json:"cli_version"`
+			Families  map[string]string `json:"generation_families"`
+		} `json:"client_identity"`
+	}
+	if err := json.Unmarshal(admin.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.ClientIdentity.Discovery != "cli" || result.ClientIdentity.CLI != config.DefaultCLIClientVersion || result.ClientIdentity.Families["models/gemini-work-a"] != "standard" {
+		t.Fatalf("missing identity: %s", admin.Body.String())
+	}
+	data := adminModelsTestRequest(r, "/v1beta/models", workKey)
+	if strings.Contains(data.Body.String(), "client_identity") {
+		t.Fatal("management metadata altered native catalog")
+	}
+}

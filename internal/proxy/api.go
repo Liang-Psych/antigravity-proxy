@@ -172,6 +172,10 @@ func (p *Proxy) handleGeminiRoute(w http.ResponseWriter, r *http.Request, route 
 }
 
 func writeGeminiError(w http.ResponseWriter, code int, message string) {
+	writeGeminiDiagnosticError(w, code, message, nil)
+}
+
+func writeGeminiDiagnosticError(w http.ResponseWriter, code int, message string, diagnostic *upstreamDiagnostic) {
 	status := "INTERNAL"
 	switch code {
 	case http.StatusBadRequest:
@@ -191,7 +195,11 @@ func writeGeminiError(w http.ResponseWriter, code int, message string) {
 	case http.StatusGatewayTimeout:
 		status = "DEADLINE_EXCEEDED"
 	}
-	httpjson.Write(w, code, map[string]any{"error": map[string]any{"code": code, "message": message, "status": status}})
+	body := map[string]any{"code": code, "message": message, "status": status}
+	if diagnostic != nil {
+		body["diagnostic"] = diagnostic
+	}
+	httpjson.Write(w, code, map[string]any{"error": body})
 }
 
 // writeGeminiUpstreamError exposes HTTP status and validated retry metadata,
@@ -206,6 +214,10 @@ func writeGeminiUpstreamError(w http.ResponseWriter, err error) {
 		for key, values := range safeUpstreamHeaders(upstream.Headers) {
 			w.Header()[key] = values
 		}
+	}
+	if upstream != nil && upstream.Diagnostic.Origin != "" {
+		writeGeminiDiagnosticError(w, status, "Google upstream request failed", &upstream.Diagnostic)
+		return
 	}
 	writeGeminiError(w, status, "Google upstream request failed")
 }

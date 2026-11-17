@@ -163,7 +163,10 @@ func TestOAuthRecoveryBudgetSpansEndpoints(t *testing.T) {
 		io.WriteString(w, `{"access_token":"new-token","expires_in":3600}`)
 	})
 	p.cfg.ProdEndpoint = prod.URL
-	_, err := p.postJSON(context.Background(), "old-token", "/operation", "", nil)
+	response, err := p.postJSON(context.Background(), "old-token", "/operation", "", nil)
+	if response != nil {
+		defer response.Body.Close()
+	}
 	var rejected *upstreamError
 	if !errors.As(err, &rejected) || rejected.Status != 401 {
 		t.Fatalf("expected final 401: %v", err)

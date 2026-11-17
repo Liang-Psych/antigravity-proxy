@@ -188,3 +188,65 @@ func TestModelCatalogFiltersDisabledMetadataWithoutNameHeuristics(t *testing.T) 
 		t.Fatalf("raw discovery catalog was filtered or rewritten: %d %s", response.Code, response.Body.String())
 	}
 }
+
+func TestConfiguredClientIdentityChangesOnlyTransport(t *testing.T) {
+	const raw = `{"contents":[{"parts":[{"text":"fixture"}]}],"future":9007199254740993123}`
+	for _, tc := range []struct {
+		name, discovery string
+		rules           []config.ClientFamilyRule
+		model, family   string
+	}{
+		{"override future model", "standard", []config.ClientFamilyRule{{ModelPrefix: "future-", Family: "cli"}}, "future-model", "cli"},
+		{"disable default CLI", "standard", []config.ClientFamilyRule{}, "gemini-4-test", "standard"},
+		{"first match wins", "cli", []config.ClientFamilyRule{{ModelPrefix: "gemini-4-special", Family: "standard"}, {ModelPrefix: "gemini-4-", Family: "cli"}}, "gemini-4-special", "standard"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var generations atomic.Int32
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				family := tc.family
+				if req.URL.Path == "/v1internal:fetchAvailableModels" {
+					family = tc.discovery
+				}
+				want := fmt.Sprintf("antigravity/2.99.0 %s/%s", runtime.GOOS, runtime.GOARCH)
+				if family == "cli" {
+					want = fmt.Sprintf("antigravity/cli/1.99.0 (os_type=%s; arch=%s; aidev_client; auth_method=oauth)", runtime.GOOS, runtime.GOARCH)
+				}
+				if req.Header.Get("User-Agent") != want || req.Header.Get("X-Client-Version") != "2.99.0" {
+					t.Errorf("wrong transport identity: %v", req.Header)
+				}
+				if req.URL.Path == "/v1internal:fetchAvailableModels" {
+					_, _ = io.WriteString(w, `{"models":{}}`)
+					return
+				}
+				var envelope struct {
+					Model   string          `json:"model"`
+					Request json.RawMessage `json:"request"`
+				}
+				if err := json.NewDecoder(req.Body).Decode(&envelope); err != nil {
+					t.Error(err)
+				}
+				if envelope.Model != tc.model || string(envelope.Request) != raw {
+					t.Error("transport rule changed native body")
+				}
+				generations.Add(1)
+				_, _ = io.WriteString(w, `{"response":{}}`)
+			}))
+			defer upstream.Close()
+			p := New(config.Config{AccessToken: "fixture-token", ProjectID: "project", DailyEndpoint: upstream.URL, ProdEndpoint: upstream.URL, ClientVersion: "2.99.0", CLIClientVersion: "1.99.0", DiscoveryClientFamily: tc.discovery, GenerationClientRules: tc.rules})
+			for _, path := range []string{"/models", "/v1beta/models/" + tc.model + ":generateContent"} {
+				method := http.MethodGet
+				if strings.Contains(path, ":generateContent") {
+					method = http.MethodPost
+				}
+				w := httptest.NewRecorder()
+				p.ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(raw)))
+				if w.Code != 200 {
+					t.Fatalf("%s: %d", path, w.Code)
+				}
+			}
+			if generations.Load() != 1 {
+				t.Fatal("missing generation")
+			}
+		})
+	}
+}

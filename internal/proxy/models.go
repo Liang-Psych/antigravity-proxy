@@ -180,6 +180,10 @@ func (p *Proxy) geminiModelCatalog(w http.ResponseWriter, r *http.Request) ([]ge
 }
 
 func (p *Proxy) handleGeminiModels(w http.ResponseWriter, r *http.Request) {
+	p.writeGeminiModels(w, r, false)
+}
+
+func (p *Proxy) writeGeminiModels(w http.ResponseWriter, r *http.Request, diagnostics bool) {
 	pageSize, after, err := parseGeminiModelPagination(r)
 	if err != nil {
 		writeGeminiError(w, http.StatusBadRequest, err.Error())
@@ -198,6 +202,17 @@ func (p *Proxy) handleGeminiModels(w http.ResponseWriter, r *http.Request) {
 	if end < len(models) {
 		cursor, _ := json.Marshal(geminiModelCursor{Version: 1, After: models[end-1].Name, PageSize: pageSize})
 		response.NextPageToken = base64.RawURLEncoding.EncodeToString(cursor)
+	}
+	if diagnostics {
+		families := make(map[string]string, len(response.Models))
+		for _, model := range response.Models {
+			families[model.Name] = p.cfg.GenerationClientFamily(strings.TrimPrefix(model.Name, "models/"))
+		}
+		httpjson.Write(w, http.StatusOK, struct {
+			geminiModelList
+			ClientIdentity map[string]any `json:"client_identity"`
+		}{response, map[string]any{"discovery_family": p.cfg.DiscoveryClientFamily, "standard_version": p.cfg.ClientVersion, "cli_version": p.cfg.CLIClientVersion, "generation_families": families}})
+		return
 	}
 	httpjson.Write(w, http.StatusOK, response)
 }
