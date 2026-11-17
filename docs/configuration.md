@@ -152,10 +152,12 @@ and verify generation with the supported version before updating the setting.
 
 ## Client Family Rules
 
+The [automatic update workflow](cli-version-updates.md) proposes newer stable versions through tested PRs.
+
 The default CLI User-Agent version is `1.5.10`, matching the
 [official CLI release](https://github.com/google-antigravity/antigravity-cli/releases/tag/1.5.10).
 Model discovery plus ordinary and streaming generation with `gemini-4-hydrogen-sonar`
-were verified using this identity on November 17, 2026.
+were verified using CLI identity `1.5.10` on November 17, 2026.
 Client-family routing preserves the previously verified behavior: discovery uses the CLI family,
 `gemini-4-*` generation uses CLI, and unmatched models use standard identity.
 `cliClientVersion` controls only the CLI User-Agent; `clientVersion` still controls

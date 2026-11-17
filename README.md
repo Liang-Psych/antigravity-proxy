@@ -205,6 +205,7 @@ For comprehensive technical specifications and reference guides, check out:
 - **[API Reference](docs/api.md)**: Full endpoint listing, streaming format, pagination, and video understanding.
 - **[Configuration Guide](docs/configuration.md)**: Config schema, environment variable reference, and security controls.
 - **[Deployment Guide](docs/deployment.md)**: Standalone Docker, Docker Compose, permissions, and network setup.
+- **[Automatic CLI Version Updates](docs/cli-version-updates.md)**: Scheduled upstream checks and tested update PRs.
 - **[Compatibility Checks](docs/compatibility.md)**: Offline native replay tests and opt-in live account verification.
 - **[Architecture & Design](docs/architecture.md)**: Deep dive into OAuth authentication, Cloud Code translation, and storage engine mechanics.
 
