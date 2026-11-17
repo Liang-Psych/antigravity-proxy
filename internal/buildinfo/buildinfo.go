@@ -2,14 +2,10 @@
 package buildinfo
 
 import (
-	_ "embed"
 	"fmt"
 	"runtime/debug"
 	"strings"
 )
-
-//go:embed VERSION
-var baseVersion string
 
 // Release tooling sets these strings with -ldflags -X.
 var (

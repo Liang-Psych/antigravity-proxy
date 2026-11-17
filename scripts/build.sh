@@ -3,7 +3,8 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-base_version=$(tr -d '\n\r' < internal/buildinfo/VERSION)
+base_version=$(sed -n 's/^const baseVersion = "\([^"]*\)".*/\1/p' internal/buildinfo/version.go)
+[ -n "$base_version" ] || { printf '%s\n' 'baseVersion not found in internal/buildinfo/version.go' >&2; exit 1; }
 case "$base_version" in
   v*) ;;
   *) base_version="v$base_version" ;;

@@ -6,6 +6,7 @@ import (
 )
 
 func TestResolve(t *testing.T) {
+	devVersion := "v" + baseVersion + "-dev"
 	originalVersion, originalCommit, originalDate := Version, Commit, Date
 	t.Cleanup(func() { Version, Commit, Date = originalVersion, originalCommit, originalDate })
 	tests := []struct {
@@ -14,7 +15,7 @@ func TestResolve(t *testing.T) {
 		build    *debug.BuildInfo
 		want     Info
 	}{
-		{name: "development", want: Info{Version: "v0.1.0-dev", Commit: "unknown", Date: "unknown"}},
+		{name: "development", want: Info{Version: devVersion, Commit: "unknown", Date: "unknown"}},
 		{
 			name: "module and vcs",
 			build: &debug.BuildInfo{Main: debug.Module{Version: "v0.1.1"}, Settings: []debug.BuildSetting{
@@ -31,14 +32,14 @@ func TestResolve(t *testing.T) {
 		},
 		{
 			name: "devel module", build: &debug.BuildInfo{Main: debug.Module{Version: "(devel)"}},
-			want: Info{Version: "v0.1.0-dev", Commit: "unknown", Date: "unknown"},
+			want: Info{Version: devVersion, Commit: "unknown", Date: "unknown"},
 		},
 		{
 			name: "dirty checkout",
 			build: &debug.BuildInfo{Settings: []debug.BuildSetting{
 				{Key: "vcs.revision", Value: "abc123"}, {Key: "vcs.modified", Value: "true"},
 			}},
-			want: Info{Version: "v0.1.0-dev", Commit: "abc123-dirty", Date: "unknown"},
+			want: Info{Version: devVersion, Commit: "abc123-dirty", Date: "unknown"},
 		},
 	}
 	for _, tt := range tests {

@@ -1,7 +1,9 @@
 # Versioning and executable identity
 
-The current version baseline is **v0.1.0**.
-`internal/buildinfo/VERSION` is the source of truth for the baseline. Go module
+The current version baseline is **v0.2.0**.
+The `baseVersion` constant in `internal/buildinfo/version.go` is the source of truth
+for the baseline; its `x-release-please-version` annotation lets Release Please
+update it. Go module
 language requirements and the upstream Antigravity client compatibility version are
 independent of this application version.
 
@@ -36,7 +38,7 @@ Releases and Git tags are managed automatically by [Release Please](https://gith
    - `fix:` triggers a patch release bump in the v0 series (`v0.1.0` → `v0.1.1`).
    - Other types (`docs:`, `perf:`, `chore:`, `refactor:`) update release notes without a version bump.
 2. **Release PR**: On pushes to `master`, Release Please updates or creates a dedicated
-   Release PR that updates `CHANGELOG.md` and `internal/buildinfo/VERSION`.
+   Release PR that updates `CHANGELOG.md` and `internal/buildinfo/version.go`.
 3. **Triggering a Release**: Whenever the maintainer is ready to release, simply review and
    merge the Release PR into `master`. Merging it will:
    - Create the corresponding Git tag (e.g. `v0.1.1`).
