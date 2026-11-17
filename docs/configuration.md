@@ -110,9 +110,12 @@ model discovery succeed. Generation may return an HTTP 200 response containing
 Streaming can then end with a truncated-response error because the rejection
 does not contain the normal completion metadata.
 
-This fork defaults to `2.32.0`. Ordinary and streaming Gemini generation were
-verified with that setting on November 14, 2026. The upstream default of `1.15.8`
-was rejected during streaming in that verification.
+This fork defaults to `2.32.0`, following the latest Antigravity App release in
+the [official Antigravity changelog](https://antigravity.google/docs/changelog);
+see [Automatic Client Version Updates](client-version-updates.md). Ordinary and
+streaming Gemini generation were verified with App identity `2.32.0` on November
+14, 2026. The upstream default of `1.15.8` was rejected during streaming in that
+verification.
 
 For an existing installation, set `clientVersion` in
 `~/.config/antigravity-proxy/config.json` to a supported version and restart the

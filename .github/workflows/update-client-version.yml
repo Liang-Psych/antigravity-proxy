@@ -1,0 +1,101 @@
+name: Update App Client Version
+
+on:
+  schedule:
+    - cron: '43 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-app-client-version
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Check, validate, and propose App client version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+      GH_REPO: ${{ github.repository }}
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Check out default branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Query official changelog and prepare candidate
+        id: candidate
+        run: python3 scripts/update-client-version.py --github-output "$GITHUB_OUTPUT" --pr-body "$RUNNER_TEMP/client-version-pr.md"
+
+      - name: Avoid duplicate or previously closed proposals
+        if: steps.candidate.outputs.updated == 'true'
+        id: proposal
+        env:
+          VERSION: ${{ steps.candidate.outputs.version }}
+        run: |
+          set -eu
+          branch="automation/app-client-version-$VERSION"
+          existing=$(gh pr list --repo "$GH_REPO" --head "$branch" --state all --json url --jq '.[].url')
+          if [ -n "$existing" ]; then
+            printf 'An update PR already exists (including closed proposals): %s\n' "$existing"
+            exit 0
+          fi
+          if [ -n "$(git ls-remote --heads origin "refs/heads/$branch")" ]; then
+            git fetch --no-tags origin "refs/heads/$branch"
+            git add internal/config/config.go docs/configuration.md README.md
+            if [ "$(git write-tree)" != "$(git rev-parse 'FETCH_HEAD^{tree}')" ]; then
+              echo "::warning::Existing update branch differs from the validated candidate; leaving it untouched."
+              exit 0
+            fi
+            echo "reuse=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        if: steps.proposal.outputs.publish == 'true'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.4'
+          cache: false
+
+      - name: Validate candidate before publishing
+        if: steps.proposal.outputs.publish == 'true'
+        run: |
+          set -eu
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          ./scripts/ci/check-quality.sh
+          ./scripts/ci/check-docs.sh
+          ./scripts/ci/check-scripts.sh
+          python3 scripts/ci/test-workflows.py
+          python3 scripts/ci/check-parity.py
+          ./scripts/ci/check-security.sh
+          COVERAGE_DIR="$RUNNER_TEMP/client-coverage" ./scripts/ci/test.sh
+          python3 scripts/ci/check-coverage.py "$RUNNER_TEMP/client-coverage/coverage.out"
+          go build -o "$RUNNER_TEMP/antigravity-proxy" ./cmd/antigravity-proxy
+          git diff --check
+
+      - name: Open update pull request
+        if: steps.proposal.outputs.publish == 'true'
+        env:
+          VERSION: ${{ steps.candidate.outputs.version }}
+          UPDATE_BRANCH: ${{ steps.proposal.outputs.branch }}
+          REUSE_BRANCH: ${{ steps.proposal.outputs.reuse }}
+        run: |
+          set -eu
+          if [ "$REUSE_BRANCH" != 'true' ]; then
+            git switch -c "$UPDATE_BRANCH"
+            git add internal/config/config.go docs/configuration.md README.md
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "fix: update default App client identity to $VERSION"
+            gh auth setup-git
+            git push origin "HEAD:refs/heads/$UPDATE_BRANCH"
+          fi
+          gh pr create --repo "$GH_REPO" --base "$BASE_BRANCH" --head "$UPDATE_BRANCH" --title "fix: update default App client identity to $VERSION" --body-file "$RUNNER_TEMP/client-version-pr.md"
