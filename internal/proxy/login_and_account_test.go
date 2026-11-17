@@ -515,15 +515,23 @@ func TestRuntimeRequiresManagementKeyAndRejectsWithheldBody(t *testing.T) {
 			t.Fatalf("unconfigured %s: %d", route, response.Code)
 		}
 	}
-	for range cap(r.slots) {
-		r.slots <- struct{}{}
+	var pools []chan struct{}
+	for _, account := range r.registry.Load().accounts {
+		pools = append(pools, account.proxy.generationSlots)
+	}
+	for _, slots := range pools {
+		for range cap(slots) {
+			slots <- struct{}{}
+		}
 	}
 	response := runtimeRequest(r, http.MethodPost, "/v1beta/models/native:generateContent", map[string]any{"contents": []any{}})
 	if response.Code != 503 {
 		t.Fatalf("missing credentials reached saturated capacity: %d", response.Code)
 	}
-	for range cap(r.slots) {
-		<-r.slots
+	for _, slots := range pools {
+		for range cap(slots) {
+			<-slots
+		}
 	}
 	server := httptest.NewServer(r)
 	defer server.Close()
@@ -755,5 +763,37 @@ func TestRuntimeLateStartupProfileCannotReplaceCommittedLogin(t *testing.T) {
 	waitQuota(t, r, .75)
 	if r.active.Load().proxy.cfg.AccountID != "b" {
 		t.Fatal("late startup profile replaced committed account")
+	}
+}
+
+func TestGenerationCapacityIsPerAccountAndSurvivesRebuild(t *testing.T) {
+	provider := newRuntimeProvider(t)
+	cfg, path := runtimeConfig(t, provider)
+	r := startRuntime(t, cfg, path, provider)
+	first, err := r.prepareAccount(config.Account{ID: "first", Enabled: true, AccessToken: "token-first"}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.status.Close()
+	second, err := r.prepareAccount(config.Account{ID: "second", Enabled: true, AccessToken: "token-second"}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.status.Close()
+	if first.proxy.generationSlots == second.proxy.generationSlots {
+		t.Fatal("accounts share one generation pool; one burst can starve another account")
+	}
+	if cap(first.proxy.generationSlots) != config.DefaultMaxConcurrentGenerations {
+		t.Fatalf("per-account capacity = %d", cap(first.proxy.generationSlots))
+	}
+	rebuilt, err := r.prepareAccount(config.Account{ID: "first", Enabled: true, AccessToken: "token-rotated"}, nil, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rebuilt.status != first.status {
+		defer rebuilt.status.Close()
+	}
+	if rebuilt.proxy.generationSlots != first.proxy.generationSlots {
+		t.Fatal("rebuilding an account discarded in-flight generation accounting")
 	}
 }

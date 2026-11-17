@@ -37,8 +37,9 @@ const DefaultQuotaHistoryMaxSamples = 10000
 // DefaultClientVersion identifies the Antigravity client on all upstream requests.
 const DefaultClientVersion = "2.32.0"
 
-// DefaultMaxConcurrentGenerations bounds generation requests held in memory.
-const DefaultMaxConcurrentGenerations = 2
+// DefaultMaxConcurrentGenerations bounds generation requests held in memory
+// for each account. Requests beyond the bound briefly queue before rejection.
+const DefaultMaxConcurrentGenerations = 4
 
 // EnvOverrides records which values were explicitly set via environment variables.
 type EnvOverrides struct {
@@ -93,7 +94,7 @@ type Config struct {
 	QuotaHistoryMaxSamples int `json:"quotaHistoryMaxSamples,omitempty"`
 	// ClientVersion is shared by generation and quota upstream transports.
 	ClientVersion string `json:"clientVersion,omitempty"`
-	// MaxConcurrentGenerations bounds simultaneously processed generation requests.
+	// MaxConcurrentGenerations bounds simultaneously processed generation requests per account.
 	MaxConcurrentGenerations int                `json:"maxConcurrentGenerations,omitempty"`
 	CLIClientVersion         string             `json:"cliClientVersion,omitempty"`
 	DiscoveryClientFamily    string             `json:"discoveryClientFamily,omitempty"`

@@ -75,6 +75,7 @@ func TestDiagnosticErrorBodyTimeoutPreservesStatus(t *testing.T) {
 
 func TestLocalCapacityDiagnosticDiffersFromUpstream(t *testing.T) {
 	p := generationTestProxy("http://127.0.0.1:1")
+	p.generationQueueWait = 0
 	for i := 0; i < cap(p.generationSlots); i++ {
 		p.generationSlots <- struct{}{}
 	}

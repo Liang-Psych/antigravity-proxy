@@ -47,7 +47,7 @@ On Unix systems, this file must have owner-only permissions (`chmod 600`). The p
   "cliClientVersion": "1.5.10",
   "discoveryClientFamily": "cli",
   "generationClientRules": [{"modelPrefix": "gemini-4-", "family": "cli"}],
-  "maxConcurrentGenerations": 2,
+  "maxConcurrentGenerations": 4,
   "quotaPollIntervalSeconds": 300,
   "quotaHistoryMaxSamples": 10000,
   "quotaHistoryPath": "/home/your-user/.local/share/antigravity-proxy/usage.jsonl",
@@ -92,7 +92,7 @@ Every setting can be specified or overridden using environment variables:
 | `ANTIGRAVITY_CLI_CLIENT_VERSION` | CLI-family User-Agent version | `1.5.10` |
 | `ANTIGRAVITY_DISCOVERY_CLIENT_FAMILY` | Model discovery identity: `standard` or `cli` | `cli` |
 | `ANTIGRAVITY_GENERATION_CLIENT_RULES` | JSON array of ordered model-prefix rules | `[{"modelPrefix":"gemini-4-","family":"cli"}]` |
-| `ANTIGRAVITY_MAX_CONCURRENT_GENERATIONS` | Maximum parallel in-flight generation requests | `2` |
+| `ANTIGRAVITY_MAX_CONCURRENT_GENERATIONS` | Maximum parallel in-flight generation requests per account; extra requests queue for up to 30 seconds | `4` |
 | `ANTIGRAVITY_QUOTA_POLL_INTERVAL_SECONDS` | Interval between background quota polls (in seconds) | `300` |
 | `ANTIGRAVITY_QUOTA_HISTORY_MAX_SAMPLES` | Maximum quota observation entries retained | `10000` |
 | `ANTIGRAVITY_QUOTA_HISTORY_PATH` | Path to persistent quota history JSONL file | `~/.local/share/antigravity-proxy/usage.jsonl` |

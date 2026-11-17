@@ -72,7 +72,6 @@ type Runtime struct {
 	cancel        context.CancelFunc
 	client        *http.Client
 	profileClient *http.Client
-	slots         chan struct{}
 	login         *oauth.SessionManager
 	background    sync.WaitGroup
 	closer        lifecycle.Closer
@@ -121,7 +120,6 @@ func newRuntime(ctx context.Context, cfg config.Config, configPath string, profi
 		cancel:        cancel,
 		client:        newUpstreamClient(defaultHeaderTimeout, defaultBodyIdleTimeout),
 		profileClient: profileClient,
-		slots:         make(chan struct{}, cfg.MaxConcurrentGenerations),
 		persist:       config.UpdateAccounts,
 		adminKeyHash:  cfg.AdminKeyHash,
 		adminAPIKey:   cfg.AdminAPIKey,
@@ -195,7 +193,13 @@ func (r *Runtime) prepareAccount(accCfg config.Account, tokens *oauth.Tokens, pr
 		proxyCfg.ProjectID = accCfg.ProjectID
 	}
 
-	p := newProxy(proxyCfg, r.client, r.slots, r.profileClient)
+	// Capacity is per account so one account's burst cannot starve another.
+	// Rebuilding an account keeps its pool, preserving in-flight accounting.
+	slots := make(chan struct{}, proxyCfg.MaxConcurrentGenerations)
+	if previous != nil && previous.proxy != nil && cap(previous.proxy.generationSlots) == cap(slots) {
+		slots = previous.proxy.generationSlots
+	}
+	p := newProxy(proxyCfg, r.client, slots, r.profileClient)
 	if tokens != nil && proxyCfg.RefreshToken != "" {
 		p.tokens.seed(tokens.AccessToken, tokens.Expiry(time.Now()))
 	}

@@ -25,9 +25,11 @@ type Proxy struct {
 	projectFlight   *projectDiscovery
 
 	generationSlots chan struct{}
-	catalogMu       sync.Mutex
-	catalog         modelCatalogCache
-	catalogEpoch    uint64
+	// generationQueueWait bounds how long a request waits for a full slot pool.
+	generationQueueWait time.Duration
+	catalogMu           sync.Mutex
+	catalog             modelCatalogCache
+	catalogEpoch        uint64
 
 	accountMu          sync.RWMutex
 	accountEmail       string
@@ -62,15 +64,16 @@ func newProxy(cfg config.Config, client *http.Client, slots chan struct{}, profi
 		profileClient = &http.Client{Timeout: oauth.DefaultHTTPTimeout}
 	}
 	p := &Proxy{
-		cfg:             cfg,
-		client:          client,
-		rpcTimeout:      defaultRPCTimeout,
-		projectID:       cfg.ProjectID,
-		generationSlots: slots,
-		accountID:       cfg.AccountID,
-		accountEmail:    cfg.AccountEmail,
-		accountName:     cfg.AccountName,
-		profileClient:   profileClient,
+		cfg:                 cfg,
+		client:              client,
+		rpcTimeout:          defaultRPCTimeout,
+		projectID:           cfg.ProjectID,
+		generationSlots:     slots,
+		generationQueueWait: defaultGenerationQueueWait,
+		accountID:           cfg.AccountID,
+		accountEmail:        cfg.AccountEmail,
+		accountName:         cfg.AccountName,
+		profileClient:       profileClient,
 	}
 	p.tokens = &tokenSource{cfg: &p.cfg, client: profileClient}
 	return p

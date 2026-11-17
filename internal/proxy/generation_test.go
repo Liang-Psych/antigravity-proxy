@@ -573,7 +573,8 @@ func TestGenerationCapacityRejectsBeforeReadAndReleasesOnCancel(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	defer upstream.Close()
-	p := generationTestProxy(upstream.URL)
+	p := New(config.Config{AccessToken: "google-token", ProjectID: "project-id", DailyEndpoint: upstream.URL, ProdEndpoint: upstream.URL, MaxConcurrentGenerations: 2})
+	p.generationQueueWait = 0
 	contexts := make([]context.CancelFunc, 2)
 	done := make([]chan struct{}, 2)
 	for i := range 2 {
@@ -671,6 +672,7 @@ func TestConfiguredGenerationCapacity(t *testing.T) {
 	}))
 	defer upstream.Close()
 	p := New(config.Config{AccessToken: "token", ProjectID: "project", DailyEndpoint: upstream.URL, ProdEndpoint: upstream.URL, MaxConcurrentGenerations: 1})
+	p.generationQueueWait = 0
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan struct{})
@@ -779,5 +781,83 @@ func TestGenerationEnvelopePreservesRawRequestAcrossRedirectAndFallback(t *testi
 		if err := json.Unmarshal(envelope["project"], &gotProject); err != nil || gotProject != project {
 			t.Fatalf("metadata escaping = %q, err=%v", gotProject, err)
 		}
+	}
+}
+
+func TestGenerationBurstQueuesUntilSlotFrees(t *testing.T) {
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		entered <- struct{}{}
+		<-release
+		_, _ = io.WriteString(w, `{"response":{"candidates":[]}}`)
+	}))
+	defer upstream.Close()
+	p := New(config.Config{AccessToken: "token", ProjectID: "project", DailyEndpoint: upstream.URL, ProdEndpoint: upstream.URL, MaxConcurrentGenerations: 1})
+	p.generationQueueWait = 5 * time.Second
+	responses := make([]*httptest.ResponseRecorder, 2)
+	done := make([]chan struct{}, 2)
+	for i := range 2 {
+		responses[i], done[i] = httptest.NewRecorder(), make(chan struct{})
+		go func(i int) {
+			defer close(done[i])
+			p.ServeHTTP(responses[i], httptest.NewRequest(http.MethodPost, "/v1beta/models/model:generateContent", strings.NewReader(`{}`)))
+		}(i)
+		if i == 0 {
+			awaitSurface(t, entered)
+		}
+	}
+	select {
+	case <-entered:
+		t.Fatal("queued request exceeded the configured bound")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	awaitSurface(t, done[0])
+	awaitSurface(t, done[1])
+	for i, response := range responses {
+		if response.Code != http.StatusOK {
+			t.Fatalf("request %d = %d %s; queued burst should be served", i, response.Code, response.Body)
+		}
+	}
+	if len(p.generationSlots) != 0 {
+		t.Fatalf("slots leaked: %d", len(p.generationSlots))
+	}
+}
+
+func TestQueuedGenerationCancelsWithoutReadingBody(t *testing.T) {
+	p := generationTestProxy("http://127.0.0.1:1")
+	p.generationQueueWait = time.Minute
+	for range cap(p.generationSlots) {
+		p.generationSlots <- struct{}{}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	body := &unreadGenerationBody{}
+	request := httptest.NewRequest(http.MethodPost, "/v1beta/models/model:generateContent", nil).WithContext(ctx)
+	request.Body = body
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		p.ServeHTTP(response, request)
+	}()
+	cancel()
+	awaitSurface(t, done)
+	if response.Code != http.StatusServiceUnavailable || body.reads != 0 || len(p.generationSlots) != cap(p.generationSlots) {
+		t.Fatalf("canceled queue wait = %d, body reads = %d, occupied = %d", response.Code, body.reads, len(p.generationSlots))
+	}
+}
+
+func TestQueuedGenerationTimesOutWithCapacityDiagnostic(t *testing.T) {
+	p := generationTestProxy("http://127.0.0.1:1")
+	p.generationQueueWait = 20 * time.Millisecond
+	for range cap(p.generationSlots) {
+		p.generationSlots <- struct{}{}
+	}
+	response := httptest.NewRecorder()
+	p.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1beta/models/model:generateContent", strings.NewReader(`{}`)))
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "1" || !strings.Contains(response.Body.String(), "generation_capacity_exhausted") {
+		t.Fatalf("queue timeout = %d %v %s", response.Code, response.Header(), response.Body)
 	}
 }

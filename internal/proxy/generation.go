@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -18,6 +19,9 @@ const (
 	// Large image and signature payloads are supported, but upstream responses
 	// must not consume unbounded memory before they can be validated.
 	maxGenerationResponseSize = 128 << 20
+	// defaultGenerationQueueWait lets bursts wait for a slot in arrival order
+	// instead of failing instantly and retrying against a still-full pool.
+	defaultGenerationQueueWait = 30 * time.Second
 )
 
 type generationEnvelope struct {
@@ -65,15 +69,17 @@ func (p *Proxy) handleGenerateContent(w http.ResponseWriter, r *http.Request, mo
 		writeGeminiError(w, http.StatusServiceUnavailable, "Google authentication unavailable")
 		return
 	}
-	select {
-	case p.generationSlots <- struct{}{}:
-		defer func() { <-p.generationSlots }()
-	default:
+	if !p.acquireGenerationSlot(r.Context()) {
+		if r.Context().Err() != nil {
+			writeGeminiError(w, http.StatusServiceUnavailable, "generation canceled")
+			return
+		}
 		rejectUnreadBody(w, r)
 		w.Header().Set("Retry-After", "1")
 		writeGeminiDiagnosticError(w, http.StatusTooManyRequests, "generation capacity exhausted", &upstreamDiagnostic{Origin: "proxy", Category: "generation_capacity_exhausted", Action: "Reduce concurrent requests or adjust maxConcurrentGenerations."})
 		return
 	}
+	defer func() { <-p.generationSlots }()
 	var err error
 	r, err = ensureRequestID(w, r)
 	if err != nil {
@@ -143,6 +149,28 @@ func (p *Proxy) handleGenerateContent(w http.ResponseWriter, r *http.Request, mo
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)
+}
+
+// acquireGenerationSlot waits up to generationQueueWait for capacity. The
+// request body remains unread while queued, so waiting holds no payload memory.
+func (p *Proxy) acquireGenerationSlot(ctx context.Context) bool {
+	select {
+	case p.generationSlots <- struct{}{}:
+		return true
+	default:
+	}
+	if p.generationQueueWait <= 0 {
+		return false
+	}
+	timer := time.NewTimer(p.generationQueueWait)
+	defer timer.Stop()
+	select {
+	case p.generationSlots <- struct{}{}:
+		return true
+	case <-ctx.Done():
+	case <-timer.C:
+	}
+	return false
 }
 
 func readGenerationResponse(body io.Reader, limit int64) ([]byte, error) {

@@ -491,8 +491,10 @@ Gemini `error.code`, `error.message`, and `error.status` fields, and add
 Categories include `invalid_request`, `authentication_failed`, `permission_denied`,
 `not_found`, `rate_limited`, `client_version_rejected`, and `upstream_error`.
 Version rejection is a diagnostic hint, not a trigger for automatic replay.
-Local generation-capacity 429 responses instead use `origin: "proxy"` and
-`category: "generation_capacity_exhausted"`.
+Each account admits `maxConcurrentGenerations` generation requests at once;
+additional requests wait in arrival order for up to 30 seconds before the body is
+read. Local generation-capacity 429 responses, returned only after that wait,
+instead use `origin: "proxy"` and `category: "generation_capacity_exhausted"`.
 
 Provider error bodies are read with a 16 KiB / 100 ms bound and discarded after
 classification. Field paths use an allowlist of native schema segments; arbitrary
