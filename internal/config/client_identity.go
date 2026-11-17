@@ -9,7 +9,7 @@ import (
 const (
 	ClientFamilyStandard    = "standard"
 	ClientFamilyCLI         = "cli"
-	DefaultCLIClientVersion = "1.3.4"
+	DefaultCLIClientVersion = "1.5.10"
 )
 
 // ClientFamilyRule selects the first matching model prefix. An empty prefix matches all models.

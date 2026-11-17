@@ -44,7 +44,7 @@ On Unix systems, this file must have owner-only permissions (`chmod 600`). The p
     }
   ],
   "clientVersion": "2.32.0",
-  "cliClientVersion": "1.3.4",
+  "cliClientVersion": "1.5.10",
   "discoveryClientFamily": "cli",
   "generationClientRules": [{"modelPrefix": "gemini-4-", "family": "cli"}],
   "maxConcurrentGenerations": 2,
@@ -89,7 +89,7 @@ Every setting can be specified or overridden using environment variables:
 | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | OAuth Client Secret paired with the refresh token | Auto-discovered / Saved |
 | `ANTIGRAVITY_PROJECT_ID` | Cloud Code project ID (auto-discovered if empty) | Auto-discovered |
 | `ANTIGRAVITY_CLIENT_VERSION` | Standard client version and `X-Client-Version` header | `2.32.0` |
-| `ANTIGRAVITY_CLI_CLIENT_VERSION` | CLI-family User-Agent version | `1.3.4` |
+| `ANTIGRAVITY_CLI_CLIENT_VERSION` | CLI-family User-Agent version | `1.5.10` |
 | `ANTIGRAVITY_DISCOVERY_CLIENT_FAMILY` | Model discovery identity: `standard` or `cli` | `cli` |
 | `ANTIGRAVITY_GENERATION_CLIENT_RULES` | JSON array of ordered model-prefix rules | `[{"modelPrefix":"gemini-4-","family":"cli"}]` |
 | `ANTIGRAVITY_MAX_CONCURRENT_GENERATIONS` | Maximum parallel in-flight generation requests | `2` |
@@ -152,7 +152,11 @@ and verify generation with the supported version before updating the setting.
 
 ## Client Family Rules
 
-Defaults preserve the previously verified behavior: discovery uses the CLI family,
+The default CLI User-Agent version is `1.5.10`, matching the
+[official CLI release](https://github.com/google-antigravity/antigravity-cli/releases/tag/1.5.10).
+Model discovery plus ordinary and streaming generation with `gemini-4-hydrogen-sonar`
+were verified using this identity on November 17, 2026.
+Client-family routing preserves the previously verified behavior: discovery uses the CLI family,
 `gemini-4-*` generation uses CLI, and unmatched models use standard identity.
 `cliClientVersion` controls only the CLI User-Agent; `clientVersion` still controls
 `X-Client-Version` for both families. These settings do not change OAuth clients,
@@ -164,7 +168,7 @@ an omitted or null list uses the default Gemini 4 rule. For example:
 
 ```json
 {
-  "cliClientVersion": "1.3.4",
+  "cliClientVersion": "1.5.10",
   "discoveryClientFamily": "cli",
   "generationClientRules": [
     {"modelPrefix": "gemini-4-special", "family": "standard"},
@@ -176,7 +180,7 @@ an omitted or null list uses the default Gemini 4 rule. For example:
 The three new environment variables override saved values. For one run:
 
 ```sh
-ANTIGRAVITY_CLI_CLIENT_VERSION=1.3.4 \
+ANTIGRAVITY_CLI_CLIENT_VERSION=1.5.10 \
 ANTIGRAVITY_GENERATION_CLIENT_RULES='[{"modelPrefix":"gemini-4-","family":"cli"}]' \
 ./antigravity-proxy serve
 ```

@@ -15,7 +15,7 @@ import (
 )
 
 func expectedCLIUserAgent() string {
-	return fmt.Sprintf("antigravity/cli/1.3.4 (os_type=%s; arch=%s; aidev_client; auth_method=oauth)", runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("antigravity/cli/1.5.10 (os_type=%s; arch=%s; aidev_client; auth_method=oauth)", runtime.GOOS, runtime.GOARCH)
 }
 
 func TestModelDiscoveryUsesCLIClientFamily(t *testing.T) {
