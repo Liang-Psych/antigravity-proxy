@@ -128,6 +128,12 @@ func (p *Proxy) handleGenerateContent(w http.ResponseWriter, r *http.Request, mo
 		cli: p.cfg.GenerationClientFamily(payload.Model) == config.ClientFamilyCLI,
 	})
 	if err != nil {
+		// Terminal 404s usually mean the model was withdrawn upstream. Drop the
+		// cached catalog so listings stop advertising it before the TTL expires.
+		var upstream *upstreamError
+		if errors.As(err, &upstream) && upstream.Status == http.StatusNotFound && !upstream.projectFailure {
+			p.invalidateGeminiModelCatalog()
+		}
 		writeGeminiUpstreamError(w, err)
 		return
 	}
@@ -469,6 +475,10 @@ func forwardGenerationStream(ctx context.Context, w http.ResponseWriter, body io
 			// net/http aborts the response (HTTP/2 resets the stream); never
 			// convert a truncated or malformed upstream stream to success.
 			panic(http.ErrAbortHandler)
+		}
+		if category == "request_canceled" {
+			writeGeminiError(w, statusClientClosedRequest, "request canceled by client")
+			return
 		}
 		writeGeminiError(w, http.StatusBadGateway, "invalid generation stream from Google upstream")
 	}

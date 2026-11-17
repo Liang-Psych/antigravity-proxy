@@ -3,6 +3,7 @@ package proxy
 
 import (
 	"antigravity-proxy/internal/httpjson"
+	"context"
 	"crypto/subtle"
 	"errors"
 	"net/http"
@@ -194,6 +195,8 @@ func writeGeminiDiagnosticError(w http.ResponseWriter, code int, message string,
 		status = "UNAVAILABLE"
 	case http.StatusGatewayTimeout:
 		status = "DEADLINE_EXCEEDED"
+	case statusClientClosedRequest:
+		status = "CANCELLED"
 	}
 	body := map[string]any{"code": code, "message": message, "status": status}
 	if diagnostic != nil {
@@ -204,7 +207,15 @@ func writeGeminiDiagnosticError(w http.ResponseWriter, code int, message string,
 
 // writeGeminiUpstreamError exposes HTTP status and validated retry metadata,
 // never provider bodies, credentials or arbitrary transport error strings.
+// statusClientClosedRequest follows the nginx convention for a caller that
+// disconnected before a response; no client observes it, but access logs do.
+const statusClientClosedRequest = 499
+
 func writeGeminiUpstreamError(w http.ResponseWriter, err error) {
+	if errors.Is(err, context.Canceled) {
+		writeGeminiError(w, statusClientClosedRequest, "request canceled by client")
+		return
+	}
 	status := http.StatusBadGateway
 	var upstream *upstreamError
 	if errors.As(err, &upstream) {

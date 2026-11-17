@@ -177,7 +177,17 @@ func (p *Proxy) postEncoded(ctx context.Context, endpoint, token string, call up
 	}
 	route, _, _ := strings.Cut(call.path, "?")
 	if err != nil {
-		slog.Warn("upstream request failed", "endpoint", label, "route", route, "duration", time.Since(started), "failure", "transport")
+		// A caller that disconnects aborts its own upstream request; that is not
+		// an upstream failure and must not be reported as one.
+		if errors.Is(ctx.Err(), context.Canceled) {
+			slog.Debug("upstream request canceled", "endpoint", label, "route", route, "duration", time.Since(started))
+			return nil, ctx.Err()
+		}
+		failure := "transport"
+		if ctx.Err() != nil {
+			failure = "timeout"
+		}
+		slog.Warn("upstream request failed", "endpoint", label, "route", route, "duration", time.Since(started), "failure", failure)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -291,7 +292,13 @@ func TestGenerationStreamFailureCategoriesPreserveResponseBoundaries(t *testing.
 					t.Fatalf("diagnostic injected into native stream: %s", recorder.Body.String())
 				}
 			} else {
-				if panicValue != nil || recorder.Code != http.StatusBadGateway || !json.Valid(recorder.Body.Bytes()) {
+				// A caller that left before any event gets the client-closed status,
+				// never a gateway error blaming Google.
+				want := http.StatusBadGateway
+				if test.category == "request_canceled" {
+					want = statusClientClosedRequest
+				}
+				if panicValue != nil || recorder.Code != want || !json.Valid(recorder.Body.Bytes()) {
 					t.Fatalf("uncommitted stream: panic=%v status=%d body=%s", panicValue, recorder.Code, recorder.Body.String())
 				}
 				if strings.Contains(recorder.Body.String(), "private-") {
@@ -859,5 +866,116 @@ func TestQueuedGenerationTimesOutWithCapacityDiagnostic(t *testing.T) {
 	p.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1beta/models/model:generateContent", strings.NewReader(`{}`)))
 	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "1" || !strings.Contains(response.Body.String(), "generation_capacity_exhausted") {
 		t.Fatalf("queue timeout = %d %v %s", response.Code, response.Header(), response.Body)
+	}
+}
+
+func TestClientCancellationIsNotReportedAsUpstreamFailure(t *testing.T) {
+	var logs upstreamLogBuffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	defer slog.SetDefault(previous)
+	entered := make(chan struct{}, 2)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		entered <- struct{}{}
+		<-r.Context().Done()
+	}))
+	defer upstream.Close()
+	p := generationTestProxy(upstream.URL)
+	for _, path := range []string{"/v1beta/models/model:generateContent", "/v1beta/models/model:streamGenerateContent?alt=sse"} {
+		t.Run(path, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			response := httptest.NewRecorder()
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				p.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`)).WithContext(ctx))
+			}()
+			awaitSurface(t, entered)
+			cancel()
+			awaitSurface(t, done)
+			if response.Code != statusClientClosedRequest || !strings.Contains(response.Body.String(), `"status":"CANCELLED"`) {
+				t.Fatalf("canceled request = %d %s; want %d CANCELLED", response.Code, response.Body, statusClientClosedRequest)
+			}
+		})
+	}
+	if strings.Contains(logs.String(), "upstream request failed") || strings.Contains(logs.String(), `"level":"WARN"`) {
+		t.Fatalf("client cancellation logged as an upstream failure: %s", logs.String())
+	}
+	if !strings.Contains(logs.String(), "upstream request canceled") {
+		t.Fatal("client cancellation left no debug trace")
+	}
+}
+
+func TestUpstreamTimeoutIsStillReportedAsFailure(t *testing.T) {
+	var logs upstreamLogBuffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	defer slog.SetDefault(previous)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The server observes the disconnect only after the body is consumed.
+		_, _ = io.Copy(io.Discard, r.Body)
+		<-r.Context().Done()
+	}))
+	defer upstream.Close()
+	p := generationTestProxy(upstream.URL)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	resp, err := p.postToAntigravity(ctx, "token", "/v1internal:generateContent", "application/json", map[string]string{})
+	if err == nil {
+		_ = resp.Body.Close()
+		t.Fatal("timed out request succeeded")
+	}
+	if !strings.Contains(logs.String(), `"failure":"timeout"`) || !strings.Contains(logs.String(), `"level":"WARN"`) {
+		t.Fatalf("upstream timeout not reported: %s", logs.String())
+	}
+}
+
+func TestGenerationNotFoundInvalidatesModelCatalog(t *testing.T) {
+	var catalogCalls, status atomic.Int32
+	status.Store(http.StatusNotFound)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		if r.URL.Path == "/v1internal:fetchAvailableModels" {
+			catalogCalls.Add(1)
+			_, _ = io.WriteString(w, `{"models":{"model":{"apiProvider":"API_PROVIDER_GOOGLE_GEMINI","displayName":"Model"}}}`)
+			return
+		}
+		w.WriteHeader(int(status.Load()))
+		_, _ = io.WriteString(w, `{"error":{"code":404,"message":"model not found","status":"NOT_FOUND"}}`)
+	}))
+	defer upstream.Close()
+	p := generationTestProxy(upstream.URL)
+	list := func() {
+		t.Helper()
+		if response := catalogTestRequest(p, "/v1beta/models"); response.Code != http.StatusOK {
+			t.Fatalf("catalog = %d %s", response.Code, response.Body)
+		}
+	}
+	generate := func() int {
+		response := httptest.NewRecorder()
+		p.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1beta/models/model:generateContent", strings.NewReader(`{}`)))
+		return response.Code
+	}
+	list()
+	list()
+	if catalogCalls.Load() != 1 {
+		t.Fatalf("catalog not cached: calls=%d", catalogCalls.Load())
+	}
+	if code := generate(); code != http.StatusNotFound {
+		t.Fatalf("generation = %d; want 404", code)
+	}
+	list()
+	if catalogCalls.Load() != 2 {
+		t.Fatalf("404 did not invalidate the catalog: calls=%d", catalogCalls.Load())
+	}
+	// Rate limits say nothing about model availability and keep the cache.
+	status.Store(http.StatusTooManyRequests)
+	if code := generate(); code != http.StatusTooManyRequests {
+		t.Fatalf("generation = %d; want 429", code)
+	}
+	list()
+	if catalogCalls.Load() != 2 {
+		t.Fatalf("429 invalidated the catalog: calls=%d", catalogCalls.Load())
 	}
 }

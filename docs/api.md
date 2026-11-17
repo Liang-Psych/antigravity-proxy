@@ -79,6 +79,10 @@ request body or model ID. Use the exact discovered wire IDs, including tier suff
 Entries explicitly marked `disabled: true` by Google are excluded from this native list;
 the raw `/models` endpoint continues returning Google's unfiltered response.
 
+Each account caches its catalog for five minutes. A generation request that ends in a
+terminal upstream 404 (other than a rejected project) discards that cache immediately,
+so a model withdrawn by Google stops being listed on the next request.
+
 
 **Query Parameters:**
 - `pageSize`: Optional integer (1–1000, default: 50).
@@ -467,6 +471,11 @@ Returns live quota snapshot across all configured accounts in a single call.
 Inspects live bucket limits and historical observations for a specific account without requiring that account's API key.
 
 ## Sanitized Error Diagnostics
+
+When a caller disconnects before any response is sent, the proxy cancels the upstream
+request and records HTTP 499 (`status: "CANCELLED"`) in its access log instead of a
+gateway error; no upstream failure warning is logged. Upstream timeouts remain warnings
+with `failure: "timeout"`.
 
 Non-success upstream HTTP responses retain their HTTP status and the existing
 Gemini `error.code`, `error.message`, and `error.status` fields, and add
